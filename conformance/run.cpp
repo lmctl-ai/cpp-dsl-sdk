@@ -19,21 +19,21 @@ struct Stub {
   static std::string fmt(double f) { char buf[64]; std::snprintf(buf, sizeof buf, "%.15g", f); return buf; }
   Stub() {
     using namespace dslvm;
-    reg.context("t", "Trace"); reg.context("root", "Thing");
-    reg.method("Trace", "int", 1, [&](void*, Args& a) { trace.push_back("int " + std::to_string(a[0].i)); return Value::none(); });
-    reg.method("Trace", "float", 1, [&](void*, Args& a) { trace.push_back("float " + fmt(a[0].f)); return Value::none(); });
-    reg.method("Trace", "str", 1, [&](void*, Args& a) { trace.push_back("str " + a[0].s); return Value::none(); });
-    reg.method("Trace", "bool", 1, [&](void*, Args& a) { trace.push_back(std::string("bool ") + (a[0].b ? "true" : "false")); return Value::none(); });
-    reg.method("Trace", "thing", 1, [&](void*, Args& a) { trace.push_back("thing " + std::to_string(static_cast<Thing*>(a[0].obj)->id)); return Value::none(); });
-    reg.method("Thing", "id", 0, [&](void* self, Args&) { return Value::integer(static_cast<Thing*>(self)->id); });
-    reg.method("Thing", "next", 0, [&](void* self, Args&) { return Value::object("Thing", make(static_cast<Thing*>(self)->id + 1)); });
-    reg.method("Thing", "name", 0, [&](void* self, Args&) { return Value::string("thing-" + std::to_string(static_cast<Thing*>(self)->id)); });
-    reg.method("Thing", "scaled", 1, [&](void* self, Args& a) { return Value::real(static_cast<Thing*>(self)->id * a[0].f); });
-    reg.function("thing", 1, [&](Args& a) { return Value::object("Thing", make(a[0].i)); });
-    reg.function("twice", 1, [&](Args& a) { return Value::integer(a[0].i * 2); });
-    reg.function("half", 1, [&](Args& a) { return Value::real(a[0].f / 2.0); });
-    reg.function("yes", 0, [&](Args&) { trace.push_back("yes"); return Value::boolean(true); });
-    reg.function("fail", 1, [&](Args& a) -> Value { throw Error(a[0].s); });
+    reg.context("t", "Trace").context("root", "Thing");
+    reg.method("Trace", "int", {"int"}, "void", [&](void*, Args& a) { trace.push_back("int " + std::to_string(a[0].i)); return Value::none(); });
+    reg.method("Trace", "float", {"float"}, "void", [&](void*, Args& a) { trace.push_back("float " + fmt(a[0].f)); return Value::none(); });
+    reg.method("Trace", "str", {"string"}, "void", [&](void*, Args& a) { trace.push_back("str " + a[0].s); return Value::none(); });
+    reg.method("Trace", "bool", {"bool"}, "void", [&](void*, Args& a) { trace.push_back(std::string("bool ") + (a[0].b ? "true" : "false")); return Value::none(); });
+    reg.method("Trace", "thing", {"Thing"}, "void", [&](void*, Args& a) { trace.push_back("thing " + std::to_string(static_cast<Thing*>(a[0].obj)->id)); return Value::none(); });
+    reg.method("Thing", "id", {}, "int", [&](void* self, Args&) { return Value::integer(static_cast<Thing*>(self)->id); });
+    reg.method("Thing", "next", {}, "Thing", [&](void* self, Args&) { return Value::object("Thing", make(static_cast<Thing*>(self)->id + 1)); });
+    reg.method("Thing", "name", {}, "string", [&](void* self, Args&) { return Value::string("thing-" + std::to_string(static_cast<Thing*>(self)->id)); });
+    reg.method("Thing", "scaled", {"float"}, "float", [&](void* self, Args& a) { return Value::real(static_cast<Thing*>(self)->id * a[0].f); });
+    reg.function("thing", {"int"}, "Thing", [&](Args& a) { return Value::object("Thing", make(a[0].i)); });
+    reg.function("twice", {"int"}, "int", [&](Args& a) { return Value::integer(a[0].i * 2); });
+    reg.function("half", {"float"}, "float", [&](Args& a) { return Value::real(a[0].f / 2.0); });
+    reg.function("yes", {}, "bool", [&](Args&) { trace.push_back("yes"); return Value::boolean(true); });
+    reg.function("fail", {"string"}, "void", [&](Args& a) -> Value { throw Error(a[0].s); });
   }
 };
 

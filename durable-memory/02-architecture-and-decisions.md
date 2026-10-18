@@ -31,3 +31,10 @@ spec `design/dsl-language.md` section 7.
   (`float-formatting`).
 - **Host run-time errors are `dslvm::Error` thrown from registry callbacks**; `run()` propagates them unchanged (vector
   `runtime-host-error`). Hosts map them to exit code 3 by convention.
+- **2026-10-18, S0' (spec v4): registration declares the schema's types** (`function(name, {params}, returns, fn)`,
+  `method(type, name, {params}, returns, fn)`) so `signatures()` can list the canonical strings that `lmscript --dsl-signatures`
+  prints; hosts diff the two in their test.sh. Duplicates are refused. Deliberately NOT added (operator R33/R34): call-time
+  type/arity/return checks, forged-file defenses, caps; the loader's v3 structural verification is unchanged.
+- **2026-10-18, S0': `Error::code`** classifies the existing errors (`LOAD_BAD_BYTECODE`, `LOAD_SCHEMA_MISMATCH`, `LOAD_UNBOUND`,
+  `RUN_ERROR`, `RUN_HOST`, `APP_FAIL`) and `report_ok/report_error/report_app_failure` print the one-line JSON result with exit
+  codes 3 (load or run) and 4 (application); compile failures are lmscript's exit 2 (R26).

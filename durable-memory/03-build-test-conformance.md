@@ -1,6 +1,6 @@
 # Build, test and conformance
 
-- **Build/test (g++ 11, C++17, no dependencies):** `make test` builds and runs `tests/dslvm_test.cpp` (36 checks: valid programs,
+- **Build/test (g++ 11, C++17, no dependencies):** `make test` builds and runs `tests/dslvm_test.cpp` (44 checks: valid programs,
   every verifier rejection, run-time checks, limits; an in-test assembler crafts invalid files). `make conformance` builds
   `conformance/run.cpp` and runs it over `conformance/vectors` (21 vectors, 21/21 on 2026-10-18). Both take seconds. Use
   `nice -n 10 make ...` on the shared box.

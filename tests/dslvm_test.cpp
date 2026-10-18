@@ -42,12 +42,12 @@ struct Host {
   std::vector<std::string> trace; Thing root{0};
   Registry reg;
   Host() {
-    reg.context("t", "Trace"); reg.context("root", "Thing");
-    reg.method("Trace", "int", 1, [&](void*, Args& a) { trace.push_back("int " + std::to_string(a[0].i)); return Value::none(); });
-    reg.method("Trace", "str", 1, [&](void*, Args& a) { trace.push_back("str " + a[0].s); return Value::none(); });
-    reg.method("Thing", "id", 0, [&](void* self, Args&) { return Value::integer(static_cast<Thing*>(self)->id); });
-    reg.function("twice", 1, [&](Args& a) { return Value::integer(a[0].i * 2); });
-    reg.function("boom", 0, [&](Args&) -> Value { throw Error("boom from the host"); });
+    reg.context("t", "Trace").context("root", "Thing");
+    reg.method("Trace", "int", {"int"}, "void", [&](void*, Args& a) { trace.push_back("int " + std::to_string(a[0].i)); return Value::none(); });
+    reg.method("Trace", "str", {"string"}, "void", [&](void*, Args& a) { trace.push_back("str " + a[0].s); return Value::none(); });
+    reg.method("Thing", "id", {}, "int", [&](void* self, Args&) { return Value::integer(static_cast<Thing*>(self)->id); });
+    reg.function("twice", {"int"}, "int", [&](Args& a) { return Value::integer(a[0].i * 2); });
+    reg.function("boom", {}, "void", [&](Args&) -> Value { throw Error("boom from the host"); });
   }
   std::vector<std::string> run(const std::string& bytes) { Program p = Program::load(bytes, SCHEMA, reg); Context c; c.set("t", &trace); c.set("root", &root); trace.clear(); p.run(c, reg); return trace; }
 };
@@ -100,6 +100,15 @@ int main() {
   { Asm a; a.fn("boom", 0).halt(); expect_error("host error propagates", [&] { h.run(a.file(SCHEMA)); }, "boom from the host"); }
   { Asm a; a.ctx("t").halt(); Program p = Program::load(a.file(SCHEMA), SCHEMA, h.reg); Context empty; expect_error("context object missing at run", [&] { p.run(empty, h.reg); }, "context variable 't' was not provided by the host for this run"); }
   { Asm a; a.ctx("t").method("Thing", "id", 0).halt(); expect_error("method on the wrong object type", [&] { h.run(a.file(SCHEMA)); }, "method Thing.id called on a Trace"); }
+  // S0' (spec v4 A02/A03): signatures, duplicate registrations, error codes, the result line.
+  { auto sigs = h.reg.signatures(); std::vector<std::string> want = {"context root: Thing", "context t: Trace", "fn boom() -> void", "fn twice(int) -> int", "method Thing.id() -> int", "method Trace.int(int) -> void", "method Trace.str(string) -> void"}; assert(sigs == want); passed++; std::cout << "ok - signatures() lists the sorted canonical strings\n"; }
+  { Registry dup; dup.function("f", {}, "void", [](Args&) { return Value::none(); }); expect_error("duplicate registration", [&] { dup.function("f", {}, "void", [](Args&) { return Value::none(); }); }, "registered twice"); }
+  { Asm a; a.fn("missing", 0).halt(); try { Program::load(a.file(SCHEMA), SCHEMA, h.reg); } catch (const Error& e) { assert(e.code == "LOAD_UNBOUND"); passed++; std::cout << "ok - unbound names carry LOAD_UNBOUND\n"; } }
+  { Asm a; a.halt(); try { Program::load(a.file(SCHEMA), SCHEMA + " ", h.reg); } catch (const Error& e) { assert(e.code == "LOAD_SCHEMA_MISMATCH"); passed++; std::cout << "ok - schema mismatch carries LOAD_SCHEMA_MISMATCH\n"; } }
+  { Asm a; a.halt(); try { Program::load(a.file(SCHEMA, VERSION, "XXXX"), SCHEMA, h.reg); } catch (const Error& e) { assert(e.code == "LOAD_BAD_BYTECODE"); passed++; std::cout << "ok - malformed files carry LOAD_BAD_BYTECODE\n"; } }
+  { Asm a; a.fn("boom", 0).halt(); try { h.run(a.file(SCHEMA)); } catch (const Error& e) { assert(e.code == "RUN_HOST"); passed++; std::cout << "ok - host-thrown errors carry RUN_HOST\n"; } }
+  { Asm a; a.pushInt(1).pushInt(0).u8(DIV_I).halt(); try { h.run(a.file(SCHEMA)); } catch (const Error& e) { assert(e.code == "RUN_ERROR"); passed++; std::cout << "ok - VM errors carry RUN_ERROR\n"; } }
+  { assert(report_error("load", Error("LOAD_UNBOUND", "x")) == 3); assert(report_error("run", Error("host said no")) == 3); assert(report_app_failure("nothing to do") == 4); assert(report_ok("42") == 0); assert(json_escape("a\"b\n") == "\"a\\\"b\\n\""); passed++; std::cout << "ok - result lines and exit codes 3 (load/run) and 4 (application)\n"; }
   // Resource limits.
   { Asm a; for (size_t i = 0; i <= MAX_STACK; ++i) a.pushInt(1); a.halt(); expect_error("operand stack limit", [&] { h.run(a.file(SCHEMA)); }, "operand stack exceeds 1024 values"); }
   { Asm a; a.pushStr(std::string(65535, 'x')); for (int i = 0; i < 9; ++i) a.u8(DUP).u8(CONCAT); a.halt(); expect_error("concatenation size limit", [&] { h.run(a.file(SCHEMA)); }, "string + result exceeds"); }
