@@ -75,7 +75,7 @@ MATH function IDs, writes to
 their read-only hidden locals, a missing HALT, and
 context declarations or import signatures the registry does not provide (the message names the host's own signature for that
 name) are refused with a message that names the problem. `run()` checks value kinds defensively and imposes no limits
-(operator decision 2026-10-18): no stack cap, no locals cap, no string cap; `max_stack` from the file is a reservation hint.
+(design decision): no stack cap, no locals cap, no string cap; `max_stack` from the file is a reservation hint.
 Integer arithmetic is 64-bit two's complement and wraps; division and remainder by zero are the run-time errors.
 
 ## Tests
