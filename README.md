@@ -99,7 +99,9 @@ dslvm::stdlib::register_string(registry);
 Copy the fragment's `functions` object into the host schema. `make test` runs the unit host and compares its sorted
 `Registry::signatures()` against the current compiler's `--dsl-signatures` output for `tests/string.schema.json`. It uses
 `$LMSCRIPT_BIN` when set; otherwise it imports the compiler runner under `${HOME}/lmctl-mono/lmscript` (`LMSCRIPT_ROOT` overrides
-that directory). Set one of those in a different checkout.
+that directory), falling back to `lmscript` on PATH when that runner is absent. Set `LMSCRIPT_BIN` to select a specific CLI.
+The parity test also checks the fixture against the shipped fragment and uses the executable selected by `BUILD`, including sanitizer builds.
+The catalog header is compiled alone with `-std=c++17 -Wall -Wextra -Werror`.
 
 String operations use byte offsets, byte lengths, and byte matching; UTF-8 is not decoded. `str_lower` and `str_upper` only map
 ASCII letters. `str_substr(s,start,count)` clamps negative starts to zero and overlong counts to the end; negative counts or starts
