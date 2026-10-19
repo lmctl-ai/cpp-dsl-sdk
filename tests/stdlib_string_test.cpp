@@ -51,7 +51,13 @@ int main(int argc, char** argv) {
   check(!str_is_float("nan") && !str_is_float("inf") && !str_is_float("1.2x") && str_to_float("bad") == 0.0);
   check(str_match("a/b.txt", "a/*.txt") && str_match("a", "[!b]") && str_match("x", "[z-a]") == false);
   check(str_match("?*[]\\", "\\?\\*\\[\\]\\\\") && str_match("[", "["));
-  check(str_match("[", "["));
+  check(str_match("]", R"([\]])") && str_match("-", R"([a\-c])") && !str_match("b", R"([a\-c])"));
+  check(str_match("\\", R"([\\])") && str_match("!", R"([\!])"));
+  check(str_match("]", "[]]") && str_match("a", "[!]]") && !str_match("]", "[!]]"));
+  check(str_match("-", "[-a]") && str_match("-", "[a-]") && !str_match("z", "[z-a]"));
+  check(str_match("[]", "[]") && str_match("[!", "[!") && str_match("\\", "\\"));
+  check(str_match("", "***") && !str_match("", "?") && !str_match("x", ""));
+  check(str_match("b", R"([a-\c])") && str_match(std::string(1, char(0x80)), std::string("[") + char(0x80) + "]"));
   check(str_match(std::string("a\0b", 3), std::string("a?b", 3)));
   std::string adversarial(12000, 'a');
   check(!str_match(adversarial, "*aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"));

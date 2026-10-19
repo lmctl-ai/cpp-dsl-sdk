@@ -108,7 +108,8 @@ input unchanged for an empty search string. It preflights the result size before
 (code `RUN_HOST`, message `str_replace: result must be at most 67108864 bytes`) above 64 MiB, including no-op copies. `str_trim` removes ASCII space and bytes `0x09` through `0x0d`. Integer and float
 parsing require a complete, in-range decimal token; `str_to_int`/`str_to_float` return zero on failure, and `str_is_int`/
 `str_is_float` distinguish failure (float `nan`/infinity are invalid). `str_repeat` rejects negative counts and results above
-64 MiB with `dslvm::Error`. `str_match` supports `*`, `?`, byte classes/ranges, `[!class]`, and backslash escapes; it uses a
+64 MiB with `dslvm::Error`. `str_match` supports `*` (including slash), `?`, byte classes/ranges, `[!class]`, and backslash escapes inside and outside classes.
+A leading `]` in a class is literal; descending ranges match no bytes. An unterminated `[` and a trailing backslash are literal. It uses a
 non-recursive matcher with O(1) auxiliary memory and a deterministic per-call limit of 2^27 work units.
 Each matcher iteration, character-class entry scanned (a byte or range, including malformed classes), and trailing star skipped
 consumes one unit. Attempting the next unit throws `dslvm::Error`, code `RUN_HOST`, message

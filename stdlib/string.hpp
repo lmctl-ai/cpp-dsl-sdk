@@ -130,10 +130,15 @@ inline bool glob_token(const std::string& p, size_t i, unsigned char c, size_t& 
     size_t first = q; bool hit = false;
     while (q < p.size() && (p[q] != ']' || q == first)) {
       work.step();
-      unsigned char lo = static_cast<unsigned char>(p[q]);
-      if (q + 2 < p.size() && p[q + 1] == '-' && p[q + 2] != ']') {
-        unsigned char hi = static_cast<unsigned char>(p[q + 2]); if (lo <= hi && c >= lo && c <= hi) hit = true; q += 3;
-      } else { if (lo == c) hit = true; ++q; }
+      auto byte = [&]() {
+        if (p[q] == '\\' && q + 1 < p.size()) ++q;
+        return static_cast<unsigned char>(p[q++]);
+      };
+      const unsigned char lo = byte();
+      if (q + 1 < p.size() && p[q] == '-' && p[q + 1] != ']') {
+        ++q; const unsigned char hi = byte();
+        if (lo <= hi && c >= lo && c <= hi) hit = true;
+      } else if (lo == c) hit = true;
     }
     if (q < p.size()) { next = q + 1; return hit != negate; }
   }
