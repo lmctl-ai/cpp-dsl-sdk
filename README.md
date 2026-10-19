@@ -113,7 +113,7 @@ second.run(context, registry);
 
 Copy the fragment's `functions` object into the host schema. `make test` runs the unit host and compares its sorted
 `Registry::signatures()` against the current compiler's `--dsl-signatures` output for `tests/string.schema.json`. It uses
-`$LMSCRIPT_BIN` when set; otherwise the check uses `lmscript` on PATH (`npm i -g @lmctl-ai/lmctl`). Set `LMSCRIPT_BIN` to select a specific CLI.
+`$LMSCRIPT_BIN` when set; otherwise the check uses a compatible `lmscript` on PATH, or runs the published package with `npx` if the PATH command is too old. Set `LMSCRIPT_BIN` to select a specific CLI.
 The parity test also checks the fixture against the shipped fragment and uses the executable selected by `BUILD`, including sanitizer builds.
 The catalog header is compiled alone with `-std=c++17 -Wall -Wextra -Werror`.
 
