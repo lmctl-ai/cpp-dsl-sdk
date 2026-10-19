@@ -7,9 +7,9 @@
 (`set(name, pointer)`), `dslvm::Program::load(bytes, schemaBytes, registry)`, `Program::run(context, registry)`, `dslvm::VERSION`,
 helpers `sha256`, `hex`, `read_file`. Everything else in the header is private detail.
 
-## Bytecode v4 (big-endian, fixed widths, IEEE-754 binary64)
+## Bytecode v5 (big-endian, fixed widths, IEEE-754 binary64)
 
-The file is `DSLB`, u16 version 4, u8[32] SHA-256 of the schema bytes, then a u32-count constant pool. Each constant is tag 1
+The file is `DSLB`, u16 version 5, u8[32] SHA-256 of the schema bytes, then a u32-count constant pool. Each constant is tag 1
 (string), u32 byte length and UTF-8 bytes. The import table is u16 count followed by u32 constant indexes for canonical function or
 method signatures. The context table is u16 count followed by name/type constant indexes. Locals are a u16 count followed by a
 type constant index and hidden flag for each slot. A u16 compiler-measured `max_stack` precedes the u32 code length and code;
@@ -26,18 +26,19 @@ big-endian two's-complement representation; all other fixed-width numbers are bi
   unchanged between `load()` and `run()`.
 - **Typed opcodes (ADD_I versus ADD_F)** (2026-10-18, poc-numpy): the VM and verifier stay type-free; the compiler decides. The VM
   checks value kinds defensively anyway.
-- **Forward-only jumps** (2026-10-18, SDK creation): the v4 S1' language still has no loops, so refusing backward jumps proves
-  termination without a step counter. The loop slice changes this verifier rule together with the conformance vectors.
+- **Structured loops, no arbitrary back edges** (R38): `WHILE_BEGIN`/`WHILE_TEST`/`LOOP_BACK` form nested verified while regions.
+  `LOOP_BACK` alone may jump backward and must target its paired head; range loops retain `FOR_RANGE`/`FOR_NEXT`. Break and
+  continue compile to forward jumps. A while may not terminate; R34 adds no VM budgets or dynamic checks.
 - **2026-10-18, v4 (spec slice S1' under R31-R34):** `Value::i` is `int64_t`; ADD/SUB/MUL/NEG wrap in two's complement (unsigned
   arithmetic, no UB), `INT64_MIN / -1` and `% -1` are handled explicitly (wrap / 0); `MOD_I` 0x33; constants carry a tag (1 =
   string, u32 count and length); an import table of canonical signature strings is resolved at load with `function_by_signature`
   / `method_by_signature` (a drift message names the host's own signature via `declared_for`); context and locals sections are
   checked/kept (`Program::locals()`, `max_stack()`, `lines()`, `line_of(pc)`); `LOAD_CTX` indexes the context table, `CALL_FN` /
   `CALL_METHOD` the import table. The limits below are GONE (operator: no memory or time limits in the language or the VM).
-- **No VM resource limits in v4** (2026-10-18, R34): operand stack, locals and string concatenation grow as the script requires.
+- **No VM resource limits in v5** (R34): operand stack, locals, string concatenation and loop execution grow/run as required.
   `max_stack` is a compiler-computed reservation hint; the host remains responsible for any process-level resource policy.
 - **Loader refuses every other version** (R-level "no backward compatibility"): SDK version = bytecode version; compiler, SDK and
-  hosts move together. v1 -> v2 -> v3 -> v4 all happened on 2026-10-18 during the POCs.
+  hosts move together. v5 refuses v4; there is no dual-version support.
 - **Float to text is `%.15g`** (v3): the same text poc-numpy prints, deterministic across hosts; part of the conformance vectors
   (`float-formatting`).
 - **Host run-time errors are `dslvm::Error` thrown from registry callbacks**; `run()` propagates them unchanged (vector

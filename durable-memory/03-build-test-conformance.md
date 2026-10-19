@@ -14,7 +14,7 @@
   `Thing.id/next/name/scaled`, `twice(i)`, `half(f)`, `yes()` (records `yes`, returns true), `fail(s)` throws. Nothing is
   C++-specific; a Rust runtime (R21) reads the same files. Approximate expected trace lines begin with `~ ` and compare their final
  finite numeric token at relative tolerance 1e-12.
-- **Where the SDK version is checked:** `dslvm::VERSION` (4). The compiler's `DSL_VERSION` in `lmscript/dsl.ts` must equal it;
+- **Where the SDK version is checked:** `dslvm::VERSION` (5). The compiler's `DSL_VERSION` in `lmscript/dsl.ts` must equal it;
   the vector `load-other-version` proves the loader refuses an older version (including v3).
 - **Loop measurements:** pass an optional `dslvm::Program::RunStats stats;` as the third argument to
   `program.run(context, registry, &stats)`. `stats.instructions` is the number of VM dispatches, including `FOR_RANGE`, each
