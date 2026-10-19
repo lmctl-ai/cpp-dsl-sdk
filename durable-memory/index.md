@@ -48,3 +48,7 @@ Continue targets the `FOR_NEXT` or `LOOP_BACK` instruction. No execution budget 
 responsibility. v4 bytecode is refused. Validation: 82 native checks plus 42 compiler-generated conformance vectors.
 
 Latest v5 integration: 86 native checks and 43 regenerated vectors pass, including caller-stack operands across inlined mixed loops. The verifier checks paired while-test stack depth and prevents bypassing the test; these are static structural rules, with no new runtime checks.
+
+## S5: located existing runtime errors
+
+Program::run attaches the line-table position of the faulting opcode, preserving the existing error code. Error::locate prefixes once; an already located nested error is preserved. report_error adds numeric line/column fields, omitting an unknown column. Column 0 is unknown, including long physical source lines; empty tables retain unlocated messages and JSON. No new runtime validation or resource limit. Native tests assert opcode PC rather than reader-next PC, exact JSON, empty tables and single attachment. Verified: 91 native checks and 50 shared vectors, including nested loops, inline calls, division/remainder and empty/line-only mappings.

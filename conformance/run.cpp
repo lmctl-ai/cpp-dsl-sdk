@@ -101,15 +101,19 @@ int main(int argc, char** argv) {
     { std::ifstream m(dir + "/manifest.json"); std::stringstream ss; ss << m.rdbuf(); std::string mf = ss.str(); size_t p = mf.find("\"name\": \"" + name + "\"");
       if (p != std::string::npos) { size_t q = mf.find("\"schema\": \"", p), next = mf.find("\"name\": \"", p + 1); if (q != std::string::npos && q < next) { q += 11; schemaFile = dir + "/" + mf.substr(q, mf.find('"', q) - q); } } }
     std::string bytes = dslvm::read_file(dir + "/" + name + ".dslb"), schema = dslvm::read_file(schemaFile);
-    Stub stub; std::string result, error; bool loaded = false, ran = false;
+    Stub stub; std::string result, error, error_code; bool loaded = false, ran = false, error_has_location = false, error_has_column = false; uint32_t error_line = 0; uint16_t error_column = 0;
     try { dslvm::Program p = dslvm::Program::load(bytes, schema, stub.reg); loaded = true; dslvm::Context c; c.set("t", &stub.trace); c.set("root", &stub.root); c.set("v", &stub.variable); c.set("xs", &stub.xs); p.run(c, stub.reg); ran = true; }
-    catch (const dslvm::Error& e) { error = e.what(); }
+    catch (const dslvm::Error& e) { error = e.what(); error_code = e.code; error_has_location = e.has_location; error_has_column = e.has_column; error_line = e.line; error_column = e.column; }
     bool ok;
     if (kind == "trace") {
       ok = ran && stub.trace.size() == lines.size();
       if (ok) for (size_t i = 0; i < lines.size(); ++i) if (!trace_line_matches(stub.trace[i], lines[i])) { ok = false; break; }
     }
     else if (kind == "runtime_error") ok = loaded && !ran && error.find(lines.at(0)) != std::string::npos;
+    else if (kind == "runtime_error_at") {
+      uint32_t line = lines.size() > 1 ? uint32_t(std::stoul(lines[1])) : 0; uint16_t column = lines.size() > 2 ? uint16_t(std::stoul(lines[2])) : 0;
+      ok = loaded && !ran && lines.size() >= 4 && error_code == lines[0] && ((line == 0 && !error_has_location) || (line != 0 && error_has_location && error_line == line)) && ((column == 0 && !error_has_column) || (column != 0 && error_has_column && error_column == column)) && error.find(lines[3]) != std::string::npos;
+    }
     else if (kind == "load_error") ok = !loaded && error.find(lines.at(0)) != std::string::npos;
     else { std::cerr << name << ": unknown expectation kind '" << kind << "'\n"; return 2; }
     if (ok) std::cout << "ok - " << name << " (" << kind << ")\n";
