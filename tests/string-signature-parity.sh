@@ -12,8 +12,10 @@ import {runCli} from "$(printf '%s' "$COMPILER_ROOT/runner.ts" | sed 's/\\/\\\\/
 process.exitCode = await runCli(process.argv.slice(2));
 EOF
   COMPILER=(node --experimental-strip-types "$WORK/runner.mjs")
+elif command -v lmscript >/dev/null 2>&1; then
+  COMPILER=(lmscript)   # the released CLI on PATH (npm install -g @lmctl-ai/lmctl, >= 0.2.346)
 else
-  echo "signature parity requires lmscript: set LMSCRIPT_BIN or LMSCRIPT_ROOT" >&2
+  echo "signature parity requires lmscript: install @lmctl-ai/lmctl (>= 0.2.346), or set LMSCRIPT_BIN or LMSCRIPT_ROOT" >&2
   exit 2
 fi
 "${COMPILER[@]}" --dsl-signatures "$ROOT/tests/string.schema.json" > "$ROOT/build/string.compiler-signatures"
