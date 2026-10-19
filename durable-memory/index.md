@@ -46,3 +46,5 @@ backward edge; it must return to the paired head. The verifier uses lexical loop
 except a forward break jump to the innermost loop's exit. Dataflow checks stack depth at loop heads and all control-flow joins.
 Continue targets the `FOR_NEXT` or `LOOP_BACK` instruction. No execution budget is added; non-termination is the author's
 responsibility. v4 bytecode is refused. Validation: 82 native checks plus 42 compiler-generated conformance vectors.
+
+Latest v5 integration: 86 native checks and 43 regenerated vectors pass, including caller-stack operands across inlined mixed loops. The verifier checks paired while-test stack depth and prevents bypassing the test; these are static structural rules, with no new runtime checks.
