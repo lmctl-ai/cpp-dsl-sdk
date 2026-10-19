@@ -112,16 +112,24 @@ inline double str_to_float(const std::string& s) {
 }
 
 namespace detail {
+struct GlobWork {
+  uint64_t steps = 0;
+  void step() {
+    if (steps == (uint64_t(1) << 27)) throw Error("str_match: pattern exceeds the 2^27 work limit");
+    ++steps;
+  }
+};
 // One glob token (never '*'): ?; escaped byte; or [class], [!class], ranges.
 // Unterminated '[' is a literal, ']' is literal at the start, descending ranges
 // are empty, matching lmhtml's documented byte-oriented catalog behavior.
-inline bool glob_token(const std::string& p, size_t i, unsigned char c, size_t& next) {
+inline bool glob_token(const std::string& p, size_t i, unsigned char c, size_t& next, GlobWork& work) {
   if (p[i] == '\\' && i + 1 < p.size()) { next = i + 2; return static_cast<unsigned char>(p[i + 1]) == c; }
   if (p[i] == '?') { next = i + 1; return true; }
   if (p[i] == '[') {
     size_t q = i + 1; bool negate = q < p.size() && p[q] == '!'; if (negate) ++q;
     size_t first = q; bool hit = false;
     while (q < p.size() && (p[q] != ']' || q == first)) {
+      work.step();
       unsigned char lo = static_cast<unsigned char>(p[q]);
       if (q + 2 < p.size() && p[q + 1] == '-' && p[q + 2] != ']') {
         unsigned char hi = static_cast<unsigned char>(p[q + 2]); if (lo <= hi && c >= lo && c <= hi) hit = true; q += 3;
@@ -133,20 +141,20 @@ inline bool glob_token(const std::string& p, size_t i, unsigned char c, size_t& 
 }
 }
 // *, ?, classes and backslash escapes operate on bytes (including NUL). The
-// last-star algorithm uses O(1) memory and is O(text*pattern), never exponential.
-// A 2^27 comparison budget prevents pathological host calls from stalling.
+// last-star algorithm uses O(1) auxiliary memory. Charge each matcher iteration,
+// character-class entry scanned, and trailing star skipped to a 2^27 work limit.
 inline bool str_match(const std::string& text, const std::string& pattern) {
-  constexpr uint64_t budget = uint64_t(1) << 27;
-  uint64_t steps = 0; size_t t = 0, p = 0, star_p = std::string::npos, star_t = 0;
+  detail::GlobWork work;
+  size_t t = 0, p = 0, star_p = std::string::npos, star_t = 0;
   while (t < text.size()) {
-    if (++steps > budget) throw Error("str_match: pattern exceeds the 2^27 comparison budget");
+    work.step();
     size_t next = 0;
     if (p < pattern.size() && pattern[p] == '*') { star_p = p++; star_t = t; }
-    else if (p < pattern.size() && detail::glob_token(pattern, p, static_cast<unsigned char>(text[t]), next)) { p = next; ++t; }
+    else if (p < pattern.size() && detail::glob_token(pattern, p, static_cast<unsigned char>(text[t]), next, work)) { p = next; ++t; }
     else if (star_p != std::string::npos) { p = star_p + 1; t = ++star_t; }
     else return false;
   }
-  while (p < pattern.size() && pattern[p] == '*') ++p;
+  while (p < pattern.size() && pattern[p] == '*') { work.step(); ++p; }
   return p == pattern.size();
 }
 

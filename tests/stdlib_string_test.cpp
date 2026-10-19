@@ -55,6 +55,14 @@ int main(int argc, char** argv) {
   check(str_match(std::string("a\0b", 3), std::string("a?b", 3)));
   std::string adversarial(12000, 'a');
   check(!str_match(adversarial, "*aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"));
+  // A malformed class used to rescan the remaining pattern without charging
+  // any work, bypassing the advertised limit even without star backtracking.
+  for (int repeat = 0; repeat < 2; ++repeat) {
+    bool refused = false;
+    try { (void)str_match(std::string(20000, '['), std::string(20000, '[')); }
+    catch (const dslvm::Error& e) { refused = e.code == "RUN_HOST" && e.message == "str_match: pattern exceeds the 2^27 work limit"; }
+    check(refused);
+  }
   // Binder signatures and an actual callback dispatch are covered in the host.
   auto entry = reg.function_by_signature("fn str_upper(string) -> string");
   dslvm::Args args{dslvm::Value::string("mixed")};
