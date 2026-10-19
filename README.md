@@ -7,7 +7,7 @@ by pinned hash (see "Consuming it").
 ## Status
 
 Experimental. The current runtime reads bytecode version 5 only; older and newer versions are refused. Use a matching
-`lmscript` compiler from the published `@lmctl-ai/lmctl` npm package.
+`lmscript` compiler from the published `@lmctl-ai/lmctl` npm package. The published compiler requires Node.js >=24.15.0.
 
 ## Build
 
