@@ -4,6 +4,7 @@
 #include "dslvm.hpp"
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <dirent.h>
 #include <fstream>
 #include <iostream>
@@ -40,8 +41,36 @@ struct Stub {
 
 static std::string unescape(const std::string& s) { std::string out; for (size_t i = 0; i < s.size(); ++i) { if (s[i] == '\\' && i + 1 < s.size() && s[i + 1] == 'n') { out += '\n'; ++i; } else out += s[i]; } return out; }
 
+// A vector may use "~ prefix number" for libm results.  The prefix is still
+// exact; only its final numeric token gets the cross-runtime tolerance.
+static bool trace_line_matches(const std::string& actual, const std::string& expected) {
+  if (expected.compare(0, 2, "~ ") != 0) return actual == expected;
+  const std::string body = expected.substr(2);
+  const size_t split = body.rfind(' ');
+  if (split == std::string::npos || split + 1 == body.size()) return false;
+  const std::string prefix = body.substr(0, split + 1);
+  if (actual.compare(0, prefix.size(), prefix) != 0) return false;
+  char* expected_end = nullptr;
+  char* actual_end = nullptr;
+  const double expected_value = std::strtod(body.c_str() + split + 1, &expected_end);
+  const double actual_value = std::strtod(actual.c_str() + prefix.size(), &actual_end);
+  if (expected_end == body.c_str() + split + 1 || *expected_end != '\0' || actual_end == actual.c_str() + prefix.size() || *actual_end != '\0') return false;
+  if (!std::isfinite(expected_value) || !std::isfinite(actual_value)) return false;
+  const double tolerance = 1e-12 * std::max(std::abs(expected_value), 1e-300);
+  return std::abs(actual_value - expected_value) <= tolerance;
+}
+
 int main(int argc, char** argv) {
   if (argc != 2) { std::cerr << "usage: conformance VECTOR_DIR\n"; return 2; }
+  // Keep the approximate matcher itself covered: tolerance accepts a close
+  // finite result, while drift, non-finite values, and prefix changes fail.
+  if (!trace_line_matches("float 1.0000000000001", "~ float 1") ||
+      trace_line_matches("float 1.00000000001", "~ float 1") ||
+      trace_line_matches("float nan", "~ float 1") ||
+      trace_line_matches("double 1", "~ float 1")) {
+    std::cerr << "approximate trace matcher self-test failed\n";
+    return 2;
+  }
   std::string dir = argv[1];
   std::vector<std::string> names;
   if (DIR* d = ::opendir(dir.c_str())) { while (dirent* e = ::readdir(d)) { std::string n = e->d_name; if (n.size() > 7 && n.compare(n.size() - 7, 7, ".expect") == 0) names.push_back(n.substr(0, n.size() - 7)); } ::closedir(d); }
@@ -58,7 +87,10 @@ int main(int argc, char** argv) {
     try { dslvm::Program p = dslvm::Program::load(bytes, schema, stub.reg); loaded = true; dslvm::Context c; c.set("t", &stub.trace); c.set("root", &stub.root); p.run(c, stub.reg); ran = true; }
     catch (const dslvm::Error& e) { error = e.what(); }
     bool ok;
-    if (kind == "trace") ok = ran && stub.trace == lines;
+    if (kind == "trace") {
+      ok = ran && stub.trace.size() == lines.size();
+      if (ok) for (size_t i = 0; i < lines.size(); ++i) if (!trace_line_matches(stub.trace[i], lines[i])) { ok = false; break; }
+    }
     else if (kind == "runtime_error") ok = loaded && !ran && error.find(lines.at(0)) != std::string::npos;
     else if (kind == "load_error") ok = !loaded && error.find(lines.at(0)) != std::string::npos;
     else { std::cerr << name << ": unknown expectation kind '" << kind << "'\n"; return 2; }

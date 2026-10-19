@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -83,6 +84,35 @@ int main() {
   { Asm a; a.local("int"); a.pushInt(21).fn(TWICE, 1).u8(STORE_LOCAL).u16(0).ctx("t", "Trace").u8(LOAD_LOCAL).u16(0).method(T_INT, 1).halt(); expect_trace("host function and locals", h, a.file(SCHEMA), {"int 42"}); }
   { Asm a; a.pushBool(true).u8(JUMP_IF_FALSE).i32(21).ctx("t", "Trace").pushInt(1).method(T_INT, 1).u8(JUMP).i32(16).ctx("t", "Trace").pushInt(2).method(T_INT, 1).halt(); expect_trace("forward jumps select a branch", h, a.file(SCHEMA), {"int 1"}); }
   { Asm a; a.ctx("t", "Trace").ctx("root", "Thing").method(THING_ID, 0).method(T_INT, 1).ctx("t", "Trace").pushFloat(2.5).u8(F2S).method(T_STR, 1).ctx("t", "Trace").pushInt(7).pushInt(2).u8(DIV_I).u8(I2F).pushFloat(0.5).u8(ADD_F).u8(F2S).method(T_STR, 1).ctx("t", "Trace").pushInt(3).pushInt(3).u8(EQ).u8(B2S).method(T_STR, 1).halt(); expect_trace("context object, floats, conversions, equality", h, a.file(SCHEMA), {"int 0", "str 2.5", "str 3.5", "str true"}); }
+  // S4 MATH: all IDs, source-order operands, integer edge semantics, and
+  // signed-zero selection for float min/max.
+  { Asm a;
+    auto fs = [&](double x, uint8_t fn) { a.ctx("t", "Trace").pushFloat(x).u8(MATH).u8(fn).u8(F2S).method(T_STR, 1); };
+    auto fb = [&](double x, double y, uint8_t fn) { a.ctx("t", "Trace").pushFloat(x).pushFloat(y).u8(MATH).u8(fn).u8(F2S).method(T_STR, 1); };
+    auto fc = [&](double x, double lo, double hi, uint8_t fn) { a.ctx("t", "Trace").pushFloat(x).pushFloat(lo).pushFloat(hi).u8(MATH).u8(fn).u8(F2S).method(T_STR, 1); };
+    auto is = [&](int64_t x, uint8_t fn) { a.ctx("t", "Trace").pushInt(x).u8(MATH).u8(fn).method(T_INT, 1); };
+    auto ib = [&](int64_t x, int64_t y, uint8_t fn) { a.ctx("t", "Trace").pushInt(x).pushInt(y).u8(MATH).u8(fn).method(T_INT, 1); };
+    auto ic = [&](int64_t x, int64_t lo, int64_t hi, uint8_t fn) { a.ctx("t", "Trace").pushInt(x).pushInt(lo).pushInt(hi).u8(MATH).u8(fn).method(T_INT, 1); };
+    fs(0.0, MATH_SIN_F); fs(0.0, MATH_COS_F); fs(4.0, MATH_SQRT_F); fs(-2.5, MATH_ABS_F); fs(1.8, MATH_FLOOR_F);
+    fb(2.0, 3.0, MATH_POW_F); fb(2.0, 3.0, MATH_MIN_F); fb(3.0, 2.0, MATH_MIN_F); fb(2.0, 3.0, MATH_MAX_F); fb(3.0, 2.0, MATH_MAX_F);
+    fc(5.0, 0.0, 3.0, MATH_CLAMP_F); fc(2.0, 5.0, 0.0, MATH_CLAMP_F); a.ctx("t", "Trace").pushFloat(0.0).pushFloat(10.0).pushFloat(0.25).u8(MATH).u8(MATH_LERP_F).u8(F2S).method(T_STR, 1);
+    fs(0.5, MATH_EASE_F); fs(0.5, MATH_EASE_IN_F); fs(0.5, MATH_EASE_OUT_F); fs(std::numeric_limits<double>::quiet_NaN(), MATH_EASE_F); a.ctx("t", "Trace").pushFloat(-2.8).u8(MATH).u8(MATH_INT_F).method(T_INT, 1);
+    is(MIN, MATH_ABS_I); ib(2, 3, MATH_MIN_I); ib(2, 3, MATH_MAX_I); ic(5, 0, 3, MATH_CLAMP_I); ic(2, 5, 0, MATH_CLAMP_I);
+    a.ctx("t", "Trace").pushFloat(0.0).pushFloat(-0.0).u8(MATH).u8(MATH_MIN_F).u8(F2S).method(T_STR, 1);
+    a.ctx("t", "Trace").pushFloat(-0.0).pushFloat(0.0).u8(MATH).u8(MATH_MAX_F).u8(F2S).method(T_STR, 1).halt();
+    expect_trace("S4 MATH functions and edge semantics", h, a.file(SCHEMA), {"str 0", "str 1", "str 2", "str 2.5", "str 1", "str 8", "str 2", "str 2", "str 3", "str 3", "str 3", "str 0", "str 2.5", "str 0.5", "str 0.25", "str 0.75", "str nan", "int -2", "int -9223372036854775808", "int 2", "int 3", "int 3", "int 0", "str 0", "str -0"}); }
+  { std::vector<double> raw;
+    Registry reg; reg.context("t", "Trace");
+    reg.method("Trace", "capture", {"float"}, "void", [&](void*, Args& args) { raw.push_back(args[0].f); return Value::none(); });
+    Asm a;
+    a.ctx("t", "Trace").pushFloat(0.0).pushFloat(10.0).pushFloat(0.25).u8(MATH).u8(MATH_LERP_F).method("method Trace.capture(float) -> void", 1);
+    a.ctx("t", "Trace").pushFloat(0.25).u8(MATH).u8(MATH_EASE_F).method("method Trace.capture(float) -> void", 1);
+    a.ctx("t", "Trace").pushFloat(0.0).pushFloat(-0.0).u8(MATH).u8(MATH_MIN_F).method("method Trace.capture(float) -> void", 1);
+    a.ctx("t", "Trace").pushFloat(-0.0).pushFloat(0.0).u8(MATH).u8(MATH_MAX_F).method("method Trace.capture(float) -> void", 1).halt();
+    Program p = Program::load(a.file(SCHEMA), SCHEMA, reg); Context c; c.set("t", &raw); p.run(c, reg);
+    assert(raw.size() == 4 && raw[0] == 2.5 && raw[1] == 0.15625 && !std::signbit(raw[2]) && std::signbit(raw[3]));
+    passed++; std::cout << "ok - S4 MATH exact values and signed zero are preserved\n";
+  }
   // S3 structured range loops: bounds are evaluated once and the hidden end is a snapshot.
   { Asm a; a.local("int", 1).local("int", 1).pushInt(0).pushInt(3).u8(FOR_RANGE).u16(0).u16(1).i32(17).ctx("t", "Trace").u8(LOAD_LOCAL).u16(0).method(T_INT, 1).u8(FOR_NEXT).u16(1).i32(-17).halt(); expect_trace("range loop runs counter 0..2", h, a.file(SCHEMA), {"int 0", "int 1", "int 2"}); }
   { Asm a; a.local("int", 1).local("int", 1).pushInt(2).pushInt(2).u8(FOR_RANGE).u16(0).u16(1).i32(23).ctx("t", "Trace").pushInt(99).method(T_INT, 1).u8(FOR_NEXT).u16(1).i32(-23).halt(); expect_trace("empty range skips body", h, a.file(SCHEMA), {}); }
@@ -126,6 +156,7 @@ int main() {
   { Asm a; a.local("int", 1).local("int", 1).local("int", 1).local("int", 1).pushInt(0).pushInt(1).u8(FOR_RANGE).u16(0).u16(1).i32(12).u8(JUMP).i32(34).u8(FOR_NEXT).u16(1).i32(-12).pushInt(0).pushInt(1).u8(FOR_RANGE).u16(2).u16(3).i32(7).u8(FOR_NEXT).u16(3).i32(-7).halt(); expect_error("ordinary jump cannot enter a sibling loop body", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "crosses a range-loop boundary"); }
   { Asm a; a.pushInt(1); expect_error("missing HALT", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "does not end with HALT"); }
   { Asm a; a.u8(0x7f).halt(); expect_error("unknown opcode", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "unknown opcode 127"); }
+  { Asm a; a.u8(MATH).u8(18).halt(); expect_error("unknown MATH function", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "unknown MATH function 18"); }
   { Asm a; a.u8(PUSH_BOOL).u8(2).halt(); expect_error("bad bool operand", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "PUSH_BOOL operand must be 0 or 1"); }
   { Asm a; a.local("int", 2); a.halt(); expect_error("bad hidden flag", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "hidden flag must be 0 or 1"); }
   { Asm a; a.line(5, 1, 1).line(2, 2, 1); a.pushInt(1).u8(POP).halt(); expect_error("unsorted line table", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "line table is not sorted"); }
