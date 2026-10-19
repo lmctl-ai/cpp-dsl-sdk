@@ -1,5 +1,7 @@
 # Architecture and decisions (with reasons)
 
+Current example names are lmweb, lmnumpy and lmcurl under the prepared lmctl-ai namespace; dated decisions below retain the original names.
+
 ## Public API (one header, C++17, standard library only)
 
 `dslvm::Error`, `dslvm::Value` (VOID, INT int64, FLOAT binary64, STR, BOOL, OBJ = host pointer + schema type name), `dslvm::Args`,

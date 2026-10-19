@@ -17,7 +17,7 @@ loop budget or runtime cap: a nonterminating script can run indefinitely by desi
   kind checks catch mismatches at run time, not at load.
 - **Hosts must declare context names and types in the registry AND provide the objects per run** (`Context::set`); a declared but
   missing object is a run-time error (`context variable 'x' was not provided by the host for this run`).
-- **Object handles are raw `void*` plus a type name.** Hosts keep objects alive for the run (arena pattern in poc-numpy and
+- **Object handles are raw `void*` plus a type name.** Hosts keep objects alive for the run (arena pattern in lmnumpy and
   lmor-dsl); the DSL cannot free or return them.
 - **Range loops are structurally bounded but have no runtime cap.** `FOR_RANGE` snapshots its two integer bounds, `FOR_NEXT`
   is the sole backward edge, and loop counters/end slots are compiler-owned hidden locals. Nesting has no VM-imposed depth

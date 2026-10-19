@@ -52,13 +52,13 @@ void method returns `Value::none()`. Host code throws `dslvm::Error` to report a
 code; lmscript's own compile failures are exit 2. `Error::code` is `LOAD_BAD_BYTECODE`, `LOAD_SCHEMA_MISMATCH`, `LOAD_UNBOUND`,
 `RUN_ERROR` (a VM error), `RUN_HOST` (thrown by a host closure) or `APP_FAIL`. When a non-empty line table maps the faulting
 opcode, `Error` carries numeric `line`/`column` and prefixes the message with `dsl line N:C: `; the standard JSON result includes
-those fields; a zero column means the line is known and only `line` is emitted. Empty line tables preserve the original message and omit the fields. Server hosts (poc-web) keep their own protocol.
+those fields; a zero column means the line is known and only `line` is emitted. Empty line tables preserve the original message and omit the fields. Server hosts (lmweb) keep their own protocol.
 
 ## Versioning rule
 
 `dslvm::VERSION` is the bytecode format version this SDK reads. The SDK version equals that number (currently 5) and the
 loader refuses every other version: there is no backward compatibility. When the compiler's format changes, the compiler,
-this header and every host move together; the history is in the living spec (v1 poc-web, v2 poc-numpy, v3 poc-curl, v4 spec
+this header and every host move together; the history is in the living spec (v1 lmweb, v2 lmnumpy, v3 lmcurl, v4 spec
 slice S1': int64 with wraparound, `MOD_I`, typed constants, an import table of canonical signatures, context/locals/lines
 sections, the compiler-measured `max_stack`, no VM limits; v5 adds structured while loops and lexical break/continue and
 refuses v4; S3 adds structured `range` loops with read-only hidden locals and

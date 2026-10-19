@@ -1,5 +1,7 @@
 # Purpose and place in the DSL framework
 
+Current prepared public names: [lmweb](https://github.com/lmctl-ai/lmweb), [lmnumpy](https://github.com/lmctl-ai/lmnumpy), and [lmcurl](https://github.com/lmctl-ai/lmcurl). Dated facts below retain the original repository names.
+
 - **Fact (2026-10-18):** `cpp-dsl-sdk` is the runtime side of the lmscript `_dsl_` framework. lmscript compiles a `_dsl_` block
   into a bytecode file; a host program embeds `include/dslvm.hpp`, implements its schema's objects in a `dslvm::Registry`, loads
   the file with the exact schema bytes and runs the chunk as a callback (operator model R12, R13). The compiler lives in
