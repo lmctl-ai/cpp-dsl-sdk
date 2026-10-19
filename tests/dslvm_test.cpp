@@ -157,6 +157,15 @@ int main() {
   { Asm a; a.u8(LOOP_BACK).i32(-5).halt(); expect_error("stray LOOP_BACK", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "has no matching WHILE_BEGIN"); }
   { Asm a; a.u8(WHILE_BEGIN); expect_error("unpaired WHILE_BEGIN", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "unclosed WHILE_BEGIN"); }
   { Asm a; a.u8(JUMP).i32(8).u8(WHILE_BEGIN).pushBool(false).u8(WHILE_TEST).i32(5).u8(LOOP_BACK).i32(-13).halt(); expect_error("ordinary jump cannot enter loop body", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "crosses a loop boundary"); }
+  { Asm a; a.u8(WHILE_BEGIN).pushInt(1).pushBool(false).u8(WHILE_TEST); const size_t exit = a.code.size(); a.i32(0);
+    a.u8(POP).u8(LOOP_BACK); const size_t back = a.code.size(); a.i32(0); const size_t end = a.code.size(); a.halt(); a.patch(exit, end); a.patch(back, 0);
+    expect_error("while condition must preserve the head stack below its bool", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "WHILE_TEST must leave the loop-head stack depth");
+  }
+  { Asm a; a.pushBool(true); const size_t head = a.code.size(); a.u8(WHILE_BEGIN).u8(WHILE_TEST); const size_t exit = a.code.size(); a.i32(0);
+    a.u8(JUMP); const size_t stop = a.code.size(); a.i32(0).u8(LOOP_BACK); const size_t back = a.code.size(); a.i32(0);
+    const size_t end = a.code.size(); a.halt(); a.patch(exit, end); a.patch(stop, end); a.patch(back, head);
+    expect_error("break-only while cannot consume a caller operand as its condition", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "WHILE_TEST must leave the loop-head stack depth");
+  }
   for (bool to_exit : {false, true}) {
     Asm a; a.u8(WHILE_BEGIN).u8(JUMP); const size_t skip = a.code.size(); a.i32(0);
     a.pushBool(false).u8(WHILE_TEST); const size_t exit = a.code.size(); a.i32(0);

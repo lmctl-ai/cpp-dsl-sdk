@@ -740,6 +740,12 @@ class Program {
         else throw Error("LOAD_BAD_BYTECODE", "control flow falls past the end of code");
       }
     }
+    for (size_t ix = 0; ix < insns.size(); ++ix) {
+      const auto& in = insns[ix];
+      if (in.op == WHILE_TEST && incoming[ix] >= 0 &&
+          incoming[ix] != incoming[at.at(in.owner)] + 1)
+        throw Error("LOAD_BAD_BYTECODE", "WHILE_TEST must leave the loop-head stack depth at offset " + std::to_string(in.pc));
+    }
   }
   std::vector<std::string> consts_; std::vector<Import> imports_; std::vector<std::string> context_; std::vector<Local> locals_; uint16_t max_stack_ = 0; std::string code_; std::vector<Line> lines_; std::map<size_t, Loop> loops_;
 };

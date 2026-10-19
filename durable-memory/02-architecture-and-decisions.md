@@ -54,3 +54,7 @@ big-endian two's-complement representation; all other fixed-width numbers are bi
   and return types. Distinct parameter tuples may share a name; registering the same parameter tuple twice is rejected even when
   the return type differs. The compiler resolves one signature to each import index, and the loader binds that exact entry. Enum
   names are ordinary schema type names in signatures. The VM adds no dynamic overload, arity, or type dispatch.
+
+While conditions must reach their WHILE_TEST before the body or exit; ordinary jumps cannot bypass the test.
+At the test, the stack is exactly the head stack plus the condition bool, including when the body always breaks.
+These are static structural checks, with no runtime budget or added dynamic checks.
