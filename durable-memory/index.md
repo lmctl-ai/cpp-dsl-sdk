@@ -2,7 +2,7 @@
 
 What this repo is: the C++ runtime for lmscript `_dsl_` bytecode (one header, `include/dslvm.hpp`: loader, verifier, stack VM, host
 registry), its unit tests and the language-neutral conformance vectors. Single source of truth for the header every host vendors.
-Status (2026-10-19): EXPERIMENTAL, works; SDK version = bytecode version = 5; private repo `lmctlhq/cpp-dsl-sdk`. v4 and all other versions are refused.
+Status (2026-10-19): EXPERIMENTAL, works; SDK version = bytecode version = 5; repo `lmctl-ai/cpp-dsl-sdk`. v4 and all other versions are refused.
 
 Team guide (start here if the framework is new to you): lmctl-mono `lmscript/durable-memory/dsl-framework.md`. Operator requirements:
 lmctl-mono `lmscript/durable-memory/requirements/dsl-bytecode.md` (R05 "provided once" is this repo; R12/R13 model; R21 Rust).

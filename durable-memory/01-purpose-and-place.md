@@ -11,5 +11,5 @@ Current prepared public names: [lmweb](https://github.com/lmctl-ai/lmweb), [lmnu
   repo with a pinned hash (see 04).
 - **Fact:** this repo never reads the schema's content. It hashes the schema bytes (SHA-256) to bind bytecode and schema; the host
   registry is the implementation and the loader checks the bytecode's names and arities against it.
-- **Consumers (2026-10-18):** `lmctlhq/poc-web`, `poc-numpy`, `poc-curl`, `lmor-dsl` (all vendor `cpp/dslvm.hpp` + `sdk.lock`).
+- **Consumers (2026-10-18):** the `poc-*` demo hosts and `lmor-dsl` (all vendor `cpp/dslvm.hpp` + `sdk.lock`).
   A future Rust runtime (R21) consumes only `conformance/vectors`, not the header.
