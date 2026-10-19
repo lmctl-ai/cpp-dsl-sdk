@@ -501,7 +501,6 @@ class Program {
         case WHILE_BEGIN: break;
         case WHILE_TEST: {
           int32_t rel = r.i32(); Value condition = pop();
-          if (condition.kind != Value::BOOL) throw Error(std::string("condition is a ") + condition.kind_name() + ", not a bool");
           if (!condition.b) jump(rel);
           break;
         }
