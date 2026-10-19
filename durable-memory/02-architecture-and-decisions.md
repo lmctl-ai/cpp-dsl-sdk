@@ -20,6 +20,11 @@ big-endian two's-complement representation; all other fixed-width numbers are bi
 
 ## Decisions
 
+- **Optional standard-library catalog (2026-10-19):** `stdlib/` is a copyable catalog, not VM or compiler machinery. Host authors
+  add its JSON fragment to their own schema and bind the ordinary functions with `register_string(Registry&)`; the language does
+  not reserve these names and other language SDKs need not share the same string behavior. Byte-level semantics and host-side
+  limits are documented in the root README and `stdlib/string.hpp`.
+
 - **Canonical imports resolved once at load** (2026-10-18, S1'): signatures remain readable strings in the constant pool, while
   call operands carry compact import indexes. This preserves schema-bound diagnostics and avoids a registry lookup on every call.
   `Program` retains pointers to the resolved registry entries, so the same registry object must outlive the program and remain

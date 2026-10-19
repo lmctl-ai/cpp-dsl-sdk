@@ -19,3 +19,9 @@
 - **Loop measurements:** pass an optional `dslvm::Program::RunStats stats;` as the third argument to
   `program.run(context, registry, &stats)`. `stats.instructions` is the number of VM dispatches, including `FOR_RANGE`, each
   `FOR_NEXT`, and `HALT`; it is observational only and imposes no budget or limit. Omit the pointer for the normal path.
+## Standard library catalog
+
+The optional `stdlib/` catalog has a C++ host binder and copyable schema fragment; these remain ordinary host functions with no
+compiler or VM support. `make test` includes `tests/stdlib_string_test.cpp` plus `tests/string-signature-parity.sh`; the latter compares
+  the test host's sorted registry signatures with the compiler output for `tests/string.schema.json`. Override `LMSCRIPT_ROOT`
+  (directory containing `runner.ts`) or provide `LMSCRIPT_BIN` when the default `${HOME}/lmctl-mono/lmscript` is unavailable.

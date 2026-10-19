@@ -11,7 +11,7 @@ lmctl-mono `lmscript/durable-memory/requirements/dsl-bytecode.md` (R05 "provided
 | --- | --- |
 | [01-purpose-and-place.md](01-purpose-and-place.md) | why a shared SDK exists, what it is not, who consumes it |
 | [02-architecture-and-decisions.md](02-architecture-and-decisions.md) | public API, bytecode v5 layout, structured loop verifier, no VM caps, version refusal |
-| [03-build-test-conformance.md](03-build-test-conformance.md) | exact commands, toolchain facts, how the vectors are generated and what a second runtime must implement |
+| [03-build-test-conformance.md](03-build-test-conformance.md) | exact commands, toolchain facts, conformance generation, and the optional string catalog checks |
 | [04-gotchas-and-limits.md](04-gotchas-and-limits.md) | vendoring by hash, version rule, shared-box load, what the verifier cannot know |
 | [05-open-items.md](05-open-items.md) | what the next agent should do, in order |
 
