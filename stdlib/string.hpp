@@ -75,7 +75,7 @@ inline std::string str_repeat(const std::string& s, int64_t count) {
 inline bool str_is_int(const std::string& s) {
   if (s.empty()) return false;
   const char* begin = s.data();
-  if (s[0] == '+') { if (s.size() == 1) return false; ++begin; }
+  if (s[0] == '+') { if (s.size() == 1 || s[1] == '-' || s[1] == '+') return false; ++begin; }
   int64_t value = 0;
   const auto r = std::from_chars(begin, s.data() + s.size(), value, 10);
   return r.ec == std::errc{} && r.ptr == s.data() + s.size();
@@ -88,7 +88,7 @@ inline int64_t str_to_int(const std::string& s) {
 inline bool str_is_float(const std::string& s) {
   if (s.empty()) return false;
   const char* begin = s.data();
-  if (s[0] == '+') { if (s.size() == 1) return false; ++begin; }
+  if (s[0] == '+') { if (s.size() == 1 || s[1] == '-' || s[1] == '+') return false; ++begin; }
   double value = 0;
   const auto r = std::from_chars(begin, s.data() + s.size(), value, std::chars_format::general);
   return r.ec == std::errc{} && r.ptr == s.data() + s.size() && std::isfinite(value);

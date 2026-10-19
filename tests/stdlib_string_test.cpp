@@ -29,6 +29,15 @@ int main(int argc, char** argv) {
   check(repeat_refused);
   check(str_is_int("-9223372036854775808") && str_to_int("-9223372036854775808") == INT64_MIN && str_to_int("+12") == 12);
   check(!str_is_int("9223372036854775808") && !str_is_int(" 3") && !str_is_int("") && str_to_int("nope") == 0);
+  for (const auto& token : {"+-1", "++1", "--1", "-+1", "+", "-", " 1", "1 ", "0x10", "1,5"}) {
+    check(!str_is_int(token) && str_to_int(token) == 0);
+    check(!str_is_float(token) && str_to_float(token) == 0.0);
+  }
+  check(!str_is_int(std::string("1\0", 2)) && !str_is_float(std::string("1\0", 2)));
+  check(!str_is_int(std::string(10000, '9')) && !str_is_float(std::string(10000, '9')));
+  check(str_is_int("9223372036854775807") && !str_is_int("-9223372036854775809"));
+  check(!str_is_float("1e99999") && !str_is_float("1e-99999") && !str_is_float("0x1p2"));
+  check(str_is_float(".5") && str_is_float("1.") && str_is_float("+1e-2"));
   check(str_is_float("-1.25e2") && std::abs(str_to_float("-1.25e2") + 125.0) < 1e-12 && str_to_float("+2.5") == 2.5);
   check(!str_is_float("nan") && !str_is_float("inf") && !str_is_float("1.2x") && str_to_float("bad") == 0.0);
   check(str_match("a/b.txt", "a/*.txt") && str_match("a", "[!b]") && str_match("x", "[z-a]") == false);
