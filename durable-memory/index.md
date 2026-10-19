@@ -38,3 +38,10 @@ duplicate parameter tuples are refused regardless of return type. Enums retain t
 names in signatures and use strings as runtime values. Self expands to the receiver type before
 registration/import binding; no identity check or dynamic overload resolution is added.
 Verified: 75 native checks and 37 shared vectors.
+
+## Compiler flow-lowering integration
+
+Shared conformance now has 39 vectors, including inline foreach and int/string/enum switch.
+Thing.len()/at() are conformance-host methods, not runtime instructions. Compiler-private
+collection/discriminator temporaries use ordinary writable slots; only range controls carry
+the wire hidden flag. No interpreter or verifier change was needed. Both runtimes pass all 39.

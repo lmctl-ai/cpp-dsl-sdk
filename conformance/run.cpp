@@ -26,6 +26,8 @@ struct Stub {
     reg.method("Trace", "str", {"string"}, "void", [&](void*, Args& a) { trace.push_back("str " + a[0].s); return Value::none(); });
     reg.method("Trace", "bool", {"bool"}, "void", [&](void*, Args& a) { trace.push_back(std::string("bool ") + (a[0].b ? "true" : "false")); return Value::none(); });
     reg.method("Trace", "thing", {"Thing"}, "void", [&](void*, Args& a) { trace.push_back("thing " + std::to_string(static_cast<Thing*>(a[0].obj)->id)); return Value::none(); });
+    reg.method("Thing", "len", {}, "int", [&](void* p, Args&) { auto n=static_cast<Thing*>(p)->id; trace.push_back("len " + std::to_string(n)); return Value::integer(n); });
+    reg.method("Thing", "at", {"int"}, "Thing", [&](void*, Args& a) { trace.push_back("at " + std::to_string(a[0].i)); return Value::object("Thing", make(a[0].i)); });
     reg.method("Thing", "id", {}, "int", [&](void* self, Args&) { return Value::integer(static_cast<Thing*>(self)->id); });
     reg.method("Thing", "next", {}, "Thing", [&](void* self, Args&) { return Value::object("Thing", make(static_cast<Thing*>(self)->id + 1)); });
     reg.method("Thing", "name", {}, "string", [&](void* self, Args&) { return Value::string("thing-" + std::to_string(static_cast<Thing*>(self)->id)); });

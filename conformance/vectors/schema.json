@@ -75,6 +75,20 @@
         "r*": "times"
       },
       "methods": {
+        "len": [
+          {
+            "params": [],
+            "returns": "int"
+          }
+        ],
+        "at": [
+          {
+            "params": [
+              "int"
+            ],
+            "returns": "Thing"
+          }
+        ],
         "id": [
           {
             "params": [],
