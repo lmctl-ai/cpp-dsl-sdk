@@ -1,9 +1,7 @@
-# Open items (what the next agent should do)
+# Open items
 
-1. Regenerate and land the shared S2 conformance vectors once the compiler schema 2 emitter is complete; both SDKs already bind
-   canonical overload imports and execute them without runtime overload dispatch.
-2. A packaged distribution (header-only tarball or CMake package) to replace copy-by-hash once more than one team consumes it.
-3. Typed verification (argument kinds at load) if untrusted bytecode ever becomes a use case; needs the schema's content in the host.
-4. Expand the optional host-side `stdlib/` catalog only when a concrete host needs additional ordinary functions. `str_join` is
-   intentionally absent because there is no list type in this catalog; list-backed helpers belong to a host schema that defines
-   its collection type.
+1. Consider a packaged header distribution if copying and pinning the header becomes inconvenient for additional consumers.
+2. Consider static argument-kind verification if untrusted bytecode becomes a supported use case; this requires the verifier to
+   inspect schema types.
+3. Expand the optional host-side string catalog when a concrete host needs additional ordinary functions. List-backed helpers
+   should be declared by hosts that define a collection type.

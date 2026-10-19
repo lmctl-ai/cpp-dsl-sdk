@@ -1,67 +1,39 @@
-# Architecture and decisions (with reasons)
+# Architecture and decisions
 
-Current example names are lmweb, lmnumpy and lmcurl under the prepared lmctl-ai namespace; dated decisions below retain the original names.
+## Public API
 
-## Public API (one header, C++17, standard library only)
+The C++17 header defines `dslvm::Error`, `Value` (void, int64, binary64, string, bool, or host object handle), `Args`,
+`Registry`, `Context`, and `Program::load` / `Program::run`. The remaining helpers support file input, schema hashing, and the
+standard host result protocol.
 
-`dslvm::Error`, `dslvm::Value` (VOID, INT int64, FLOAT binary64, STR, BOOL, OBJ = host pointer + schema type name), `dslvm::Args`,
-`dslvm::Registry` (`function(name, argc, fn)`, `method(type, name, argc, fn)`, `context(name, type)`), `dslvm::Context`
-(`set(name, pointer)`), `dslvm::Program::load(bytes, schemaBytes, registry)`, `Program::run(context, registry)`, `dslvm::VERSION`,
-helpers `sha256`, `hex`, `read_file`. Everything else in the header is private detail.
+## Current bytecode format
 
-## Bytecode v5 (big-endian, fixed widths, IEEE-754 binary64)
-
-The file is `DSLB`, u16 version 5, u8[32] SHA-256 of the schema bytes, then a u32-count constant pool. Each constant is tag 1
-(string), u32 byte length and UTF-8 bytes. The import table is u16 count followed by u32 constant indexes for canonical function or
-method signatures. The context table is u16 count followed by name/type constant indexes. Locals are a u16 count followed by a
-type constant index and hidden flag for each slot. A u16 compiler-measured `max_stack` precedes the u32 code length and code;
-the file ends with a u32-count line table of `(pc, line, column)` entries, which may be empty. Integer operands are i64 in
-big-endian two's-complement representation; all other fixed-width numbers are big-endian. Opcodes retain v1-v3 numbers, with
-`PUSH_STR` and calls using their v4 u32/u16 indexes, and add `MOD_I` at `0x33`. Full table: the mono spec
-`design/dsl-language.md` section 7.
+Version 5 uses a big-endian fixed-width container with a schema SHA-256, tagged string constants, canonical function and method
+imports, context declarations, typed local metadata, a compiler-measured maximum stack reservation, instructions, and an
+optional source line table. Integers are signed 64-bit two's-complement values; floating-point values are IEEE-754 binary64.
+The loader accepts version 5 only.
 
 ## Decisions
 
-- **Optional standard-library catalog (2026-10-19):** `stdlib/` is a copyable catalog, not VM or compiler machinery. Host authors
-  add its JSON fragment to their own schema and bind the ordinary functions with `register_string(Registry&)`; the language does
-  not reserve these names and other language SDKs need not share the same string behavior. Byte-level semantics and host-side
-  limits are documented in the root README and `stdlib/string.hpp`.
+- The optional `stdlib/` directory is a copyable catalog, not VM or compiler machinery. Its JSON fragment and C++ binder describe
+  ordinary host functions. Hosts may choose their own catalog and semantics.
+- The loader resolves canonical import signatures once and retains pointers to registry entries. The same registry must outlive
+  the loaded program and remain unchanged while it runs.
+- Typed opcodes keep type selection in the compiler. The VM also checks value kinds defensively when executing malformed or
+  mismatched bytecode.
+- Integer addition, subtraction, multiplication, and negation wrap in two's-complement arithmetic. Division and remainder by
+  zero are runtime errors; `INT64_MIN / -1` wraps and `INT64_MIN % -1` is zero.
+- Structured range and while loops are verified as paired regions. Only their paired loop instructions can transfer execution
+  backward. Other jumps are forward and must respect lexical loop boundaries. Break and continue compile to permitted forward
+  transfers within their loop.
+- There are no VM execution, stack, local, or string-size budgets. Bytecode is trusted input; process resource policy belongs to
+  the host. `max_stack` is a reservation hint, not an execution limit.
+- SDK and bytecode versions move together. The loader rejects every version other than 5; compatibility with earlier formats is
+  intentionally unsupported.
+- Registry entries declare full parameter and return types. Overloads with different parameter lists are supported; duplicate
+  parameter lists are rejected. The sorted registry signatures can be compared with the compiler's canonical schema signatures.
+- Host callbacks report failures by throwing `dslvm::Error`. CLI hosts can use the shared JSON result helpers; hosts choose their
+  own application behavior and process-level policy.
 
-- **Canonical imports resolved once at load** (2026-10-18, S1'): signatures remain readable strings in the constant pool, while
-  call operands carry compact import indexes. This preserves schema-bound diagnostics and avoids a registry lookup on every call.
-  `Program` retains pointers to the resolved registry entries, so the same registry object must outlive the program and remain
-  unchanged between `load()` and `run()`.
-- **Typed opcodes (ADD_I versus ADD_F)** (2026-10-18, poc-numpy): the VM and verifier stay type-free; the compiler decides. The VM
-  checks value kinds defensively anyway.
-- **Structured loops, no arbitrary back edges** (R38): `WHILE_BEGIN`/`WHILE_TEST`/`LOOP_BACK` form nested verified while regions.
-  `LOOP_BACK` alone may jump backward and must target its paired head; range loops retain `FOR_RANGE`/`FOR_NEXT`. Break and
-  continue compile to forward jumps. A while may not terminate; R34 adds no VM budgets or dynamic checks.
-- **2026-10-18, v4 (spec slice S1' under R31-R34):** `Value::i` is `int64_t`; ADD/SUB/MUL/NEG wrap in two's complement (unsigned
-  arithmetic, no UB), `INT64_MIN / -1` and `% -1` are handled explicitly (wrap / 0); `MOD_I` 0x33; constants carry a tag (1 =
-  string, u32 count and length); an import table of canonical signature strings is resolved at load with `function_by_signature`
-  / `method_by_signature` (a drift message names the host's own signature via `declared_for`); context and locals sections are
-  checked/kept (`Program::locals()`, `max_stack()`, `lines()`, `line_of(pc)`); `LOAD_CTX` indexes the context table, `CALL_FN` /
-  `CALL_METHOD` the import table. The limits below are GONE (operator: no memory or time limits in the language or the VM).
-- **No VM resource limits in v5** (R34): operand stack, locals, string concatenation and loop execution grow/run as required.
-  `max_stack` is a compiler-computed reservation hint; the host remains responsible for any process-level resource policy.
-- **Loader refuses every other version** (R-level "no backward compatibility"): SDK version = bytecode version; compiler, SDK and
-  hosts move together. v5 refuses v4; there is no dual-version support.
-- **Float to text is `%.15g`** (v3): the same text poc-numpy prints, deterministic across hosts; part of the conformance vectors
-  (`float-formatting`).
-- **Host run-time errors are `dslvm::Error` thrown from registry callbacks**; `run()` propagates them unchanged (vector
-  `runtime-host-error`). Hosts map them to exit code 3 by convention.
-- **2026-10-18, S0' (spec v4): registration declares the schema's types** (`function(name, {params}, returns, fn)`,
-  `method(type, name, {params}, returns, fn)`) so `signatures()` can list the canonical strings that `lmscript --dsl-signatures`
-  prints; hosts diff the two in their test.sh. Duplicates are refused. Deliberately NOT added (operator R33/R34): call-time
-  type/arity/return checks, forged-file defenses, caps; the loader's v3 structural verification is unchanged.
-- **2026-10-18, S0': `Error::code`** classifies the existing errors (`LOAD_BAD_BYTECODE`, `LOAD_SCHEMA_MISMATCH`, `LOAD_UNBOUND`,
-  `RUN_ERROR`, `RUN_HOST`, `APP_FAIL`) and `report_ok/report_error/report_app_failure` print the one-line JSON result with exit
-  codes 3 (load or run) and 4 (application); compile failures are lmscript's exit 2 (R26).
-- **2026-10-18, S2: exact overload imports.** Registry entries are keyed by complete canonical signatures, including parameter
-  and return types. Distinct parameter tuples may share a name; registering the same parameter tuple twice is rejected even when
-  the return type differs. The compiler resolves one signature to each import index, and the loader binds that exact entry. Enum
-  names are ordinary schema type names in signatures. The VM adds no dynamic overload, arity, or type dispatch.
-
-While conditions must reach their WHILE_TEST before the body or exit; ordinary jumps cannot bypass the test.
-At the test, the stack is exactly the head stack plus the condition bool, including when the body always breaks.
-These are static structural checks, with no runtime budget or added dynamic checks.
+While loops must reach their paired condition test before executing the body or exiting. Stack depth at each loop head and each
+control-flow join must agree. These are static loader checks; no execution budget is added.

@@ -1,5 +1,5 @@
 // Conformance runner: implements the host stub described in conformance/vectors/manifest.json ("host") and checks every
-// NAME.dslb against NAME.expect. A second runtime (Rust, R21) implements the same stub and reads the same files.
+// NAME.dslb against NAME.expect. An independent runtime (for example, Rust) can implement the same stub and reads the same files.
 // Usage: build/conformance conformance/vectors
 #include "dslvm.hpp"
 #include <algorithm>

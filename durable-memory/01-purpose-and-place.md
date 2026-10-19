@@ -1,15 +1,12 @@
-# Purpose and place in the DSL framework
+# Purpose and place
 
-Current prepared public names: [lmweb](https://github.com/lmctl-ai/lmweb), [lmnumpy](https://github.com/lmctl-ai/lmnumpy), and [lmcurl](https://github.com/lmctl-ai/lmcurl). Dated facts below retain the original repository names.
+`cpp-dsl-sdk` is the C++ runtime for lmscript `_dsl_` bytecode. A host embeds `include/dslvm.hpp`, binds the functions and object
+methods in its JSON schema through `dslvm::Registry`, loads bytecode against the exact schema bytes, and runs it with host-owned
+objects in a `dslvm::Context`.
 
-- **Fact (2026-10-18):** `cpp-dsl-sdk` is the runtime side of the lmscript `_dsl_` framework. lmscript compiles a `_dsl_` block
-  into a bytecode file; a host program embeds `include/dslvm.hpp`, implements its schema's objects in a `dslvm::Registry`, loads
-  the file with the exact schema bytes and runs the chunk as a callback (operator model R12, R13). The compiler lives in
-  lmctl-mono `lmscript/dsl.ts`; the language spec is lmctl-mono `lmscript/durable-memory/design/dsl-language.md`.
-- **Fact:** the repo was created on 2026-10-18 after three proof-of-concept hosts (poc-web, poc-numpy, poc-curl) each carried a
-  verbatim copy of the header; requirement R05 says the runtime is "provided once". The copies were replaced by vendoring from this
-  repo with a pinned hash (see 04).
-- **Fact:** this repo never reads the schema's content. It hashes the schema bytes (SHA-256) to bind bytecode and schema; the host
-  registry is the implementation and the loader checks the bytecode's names and arities against it.
-- **Consumers (2026-10-18):** the `poc-*` demo hosts and `lmor-dsl` (all vendor `cpp/dslvm.hpp` + `sdk.lock`).
-  A future Rust runtime (R21) consumes only `conformance/vectors`, not the header.
+The runtime hashes schema bytes to bind them to the bytecode; it does not parse schema JSON. The registry provides the concrete
+host implementation and is checked against the bytecode imports before execution. The header is vendored by hosts with a pinned
+commit and SHA-256 so each host can build without fetching this repository.
+
+The language-neutral files in `conformance/vectors` let independent runtime implementations check that they agree on execution
+and errors. They are the cross-runtime test contract; the C++ header is not required by another implementation.

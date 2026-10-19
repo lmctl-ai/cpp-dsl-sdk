@@ -4,19 +4,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOST="${1:-$ROOT/build/stdlib_string_test}"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/dsl-string-signatures-XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
-COMPILER_ROOT="${LMSCRIPT_ROOT:-${HOME}/lmctl-mono/lmscript}"
 if [[ -n "${LMSCRIPT_BIN:-}" ]]; then
   COMPILER=("$LMSCRIPT_BIN")
-elif [[ -f "$COMPILER_ROOT/runner.ts" ]]; then
-  cat > "$WORK/runner.mjs" <<EOF
-import {runCli} from "$(printf '%s' "$COMPILER_ROOT/runner.ts" | sed 's/\\/\\\\/g; s/"/\\"/g')";
-process.exitCode = await runCli(process.argv.slice(2));
-EOF
-  COMPILER=(node --experimental-strip-types "$WORK/runner.mjs")
-elif command -v lmscript >/dev/null 2>&1; then
-  COMPILER=(lmscript)   # the released CLI on PATH (npm install -g @lmctl-ai/lmctl, >= 0.2.346)
+elif command -v lmscript >/dev/null 2>&1 && lmscript --dsl-signatures "$ROOT/tests/string.schema.json" > /dev/null 2>&1; then
+  COMPILER=(lmscript)
+elif command -v npx >/dev/null 2>&1; then
+  COMPILER=(npx --yes --package=@lmctl-ai/lmctl -- lmscript)
 else
-  echo "signature parity requires lmscript: install @lmctl-ai/lmctl (>= 0.2.346), or set LMSCRIPT_BIN or LMSCRIPT_ROOT" >&2
+  echo "fail: signature parity needs a compiler with --dsl-signatures; install @lmctl-ai/lmctl, provide npx, or set LMSCRIPT_BIN" >&2
   exit 2
 fi
 node - "$ROOT" <<'JS_CHECK'

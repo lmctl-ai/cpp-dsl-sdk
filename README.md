@@ -2,9 +2,17 @@
 
 The C++ runtime for lmscript `_dsl_` bytecode: loader, verifier, VM and host registry in one header, `include/dslvm.hpp`.
 C++17, standard library only, no dependencies. This repository is the single source of truth for the header; hosts vendor it
-by pinned hash (see "Consuming it"). Status: EXPERIMENTAL. The compiler that produces the bytecode is lmscript, published
-on npm as `@lmctl-ai/lmctl` (0.2.347 or later emits bytecode v5); its language specification is not public yet, so this README,
-the header comments and `conformance/vectors` are the public description of the format.
+by pinned hash (see "Consuming it").
+
+## Status
+
+Experimental. The current runtime reads bytecode version 5 only; older and newer versions are refused. Use a matching
+`lmscript` compiler from the published `@lmctl-ai/lmctl` npm package.
+
+## Build
+
+The SDK is header-only. Include `include/dslvm.hpp` and compile a C++17 host; no library build or external dependency is needed.
+See [Embedding it in twenty lines](#embedding-it-in-twenty-lines) for a minimal host.
 
 ## What it is
 
@@ -42,7 +50,7 @@ int main(int argc, char** argv) {
 
 `Registry` is declared with the schema's types (parameter types and return type, as strings); a name may have several overloads with distinct parameter tuples, while registering the same parameter tuple twice is refused. `load()` resolves canonical import signatures (including parameter and return types), and refuses a file whose imports the registry does not provide, before anything runs. `reg.signatures()` lists the
 sorted canonical strings (`context g: Greeter`, `fn now() -> string`, `method Greeter.say(string) -> void`), exactly what
-`lmscript --dsl-signatures SCHEMA` prints, so a host's test diffs the two sources of truth (spec v5 S0, A02). That is a consistency
+`lmscript --dsl-signatures SCHEMA` prints, so a host's test diffs the two sources of truth. That is a consistency
 check, not a defense: by design the VM performs no call-time type checks; bytecode is trusted like the host's
 own code. `Value` carries `INT` (int64), `FLOAT` (binary64), `STR`, `BOOL` and `OBJ` (a host pointer plus the schema type name); a
 void method returns `Value::none()`. Host code throws `dslvm::Error` to report a run-time failure.
@@ -58,12 +66,8 @@ those fields; a zero column means the line is known and only `line` is emitted. 
 
 `dslvm::VERSION` is the bytecode format version this SDK reads. The SDK version equals that number (currently 5) and the
 loader refuses every other version: there is no backward compatibility. When the compiler's format changes, the compiler,
-this header and every host move together; the history is in the living spec (v1 lmweb, v2 lmnumpy, v3 lmcurl, v4 spec
-slice S1': int64 with wraparound, `MOD_I`, typed constants, an import table of canonical signatures, context/locals/lines
-sections, the compiler-measured `max_stack`, no VM limits; v5 adds structured while loops and lexical break/continue and
-refuses v4; S3 adds structured `range` loops with read-only hidden locals and
-the optional `RunStats` dispatch counter for host measurements; S4 adds the MATH opcode with 18 primitive function IDs (libm for
-sin/cos/pow, relative tolerance 1e-12 in shared vectors).
+this header and every host move together. Version 5 includes structured `while` and `range` loops, lexical `break` and
+`continue`, integer and floating-point math, typed imports, and line tables.
 
 ## What load() guarantees
 
@@ -78,10 +82,10 @@ name) are refused with a message that names the problem. `run()` checks value ki
 (design decision): no stack cap, no locals cap, no string cap; `max_stack` from the file is a reservation hint.
 Integer arithmetic is 64-bit two's complement and wraps; division and remainder by zero are the run-time errors.
 
-## Tests
+## Test
 
-    make test           # tests/dslvm_test.cpp: 91 checks (overloads, math, range/while loops, int64 wraparound, sections, verifier rejection, run-time checks, no-limit pins, signatures, result line)
-    make conformance    # conformance/run.cpp over conformance/vectors: 50 language-neutral vectors including S3-S4 loops, S5 while control, and math
+    make test           # native runtime and optional string catalog tests
+    make conformance    # language-neutral vectors in conformance/vectors
     make test-string-stdlib # stdlib/string.hpp unit cases and schema/registry/compiler signature parity
 
 ## Standard library catalog
@@ -109,8 +113,7 @@ second.run(context, registry);
 
 Copy the fragment's `functions` object into the host schema. `make test` runs the unit host and compares its sorted
 `Registry::signatures()` against the current compiler's `--dsl-signatures` output for `tests/string.schema.json`. It uses
-`$LMSCRIPT_BIN` when set; otherwise maintainers can point `LMSCRIPT_ROOT` at a local lmscript source checkout (not public), and everyone else
-uses `lmscript` on PATH (`npm i -g @lmctl-ai/lmctl`). Set `LMSCRIPT_BIN` to select a specific CLI.
+`$LMSCRIPT_BIN` when set; otherwise the check uses `lmscript` on PATH (`npm i -g @lmctl-ai/lmctl`). Set `LMSCRIPT_BIN` to select a specific CLI.
 The parity test also checks the fixture against the shipped fragment and uses the executable selected by `BUILD`, including sanitizer builds.
 The catalog header is compiled alone with `-std=c++17 -Wall -Wextra -Werror`.
 
@@ -150,7 +153,7 @@ Each matcher iteration, character-class entry scanned (a byte or range, includin
 consumes one unit. Attempting the next unit throws `dslvm::Error`, code `RUN_HOST`, message
 `str_match: pattern exceeds the 2^27 work limit`; it does not return a false match. These catalog limits are host policy, not VM limits.
 
-`conformance/vectors` is generated by the lmscript compiler's conformance generator (maintainer tooling, not public)
+`conformance/vectors` is generated by the lmscript compiler's conformance generator
 from small DSL programs that cover every opcode, type and error path: `NAME.dsl` (source), `NAME.dslb` (bytecode),
 `NAME.expect` (line 1 `trace`, `runtime_error` or `load_error`, then the expected trace lines or error substring) and
 `manifest.json`, whose `host` entry describes the stub a runtime must implement (context `t` records calls; `root`, `thing`,
