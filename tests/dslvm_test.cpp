@@ -1,4 +1,4 @@
-// Unit tests of the SDK runtime: a tiny in-test assembler builds valid and invalid bytecode v4; every verifier rejection and
+// Unit tests of the SDK runtime: a tiny in-test assembler builds valid and invalid bytecode v5; every verifier rejection and
 // the run-time checks are exercised, and the absence of limits is pinned. Build and run: make test
 #include "dslvm.hpp"
 #include <cassert>
@@ -35,6 +35,7 @@ struct Asm {
   Asm& fn(const std::string& canonical, unsigned argc) { return u8(CALL_FN).u16(imp(canonical)).u8(argc); }
   Asm& method(const std::string& canonical, unsigned argc) { return u8(CALL_METHOD).u16(imp(canonical)).u8(argc); }
   Asm& halt() { return u8(HALT); }
+  void patch(size_t at, size_t target) { int32_t rel = int32_t(target) - int32_t(at + 4); for (int k = 0; k < 4; ++k) code[at + k] = char(uint32_t(rel) >> (24 - k * 8)); }
   static void be16(std::string& o, unsigned v) { o.push_back(char(v >> 8)); o.push_back(char(v)); }
   static void be32(std::string& o, uint32_t v) { for (int i = 3; i >= 0; --i) o.push_back(char((v >> (i * 8)) & 0xff)); }
   std::string file(const std::string& schema, uint16_t version = VERSION, const std::string& magic = "DSLB") const {
@@ -114,6 +115,8 @@ int main() {
     passed++; std::cout << "ok - S4 MATH exact values and signed zero are preserved\n";
   }
   // S3 structured range loops: bounds are evaluated once and the hidden end is a snapshot.
+  { Asm a; a.local("int").pushInt(0).u8(STORE_LOCAL).u16(0); const size_t head = a.code.size(); a.u8(WHILE_BEGIN).u8(LOAD_LOCAL).u16(0).pushInt(3).u8(LT_I).u8(WHILE_TEST); const size_t exit = a.code.size(); a.i32(0).ctx("t", "Trace").u8(LOAD_LOCAL).u16(0).method(T_INT, 1).u8(LOAD_LOCAL).u16(0).pushInt(1).u8(ADD_I).u8(STORE_LOCAL).u16(0).u8(LOOP_BACK); const size_t back = a.code.size(); a.i32(0); const size_t end = a.code.size(); a.patch(exit, end); a.patch(back, head); a.halt(); expect_trace("while loop runs zero-test condition until false", h, a.file(SCHEMA), {"int 0", "int 1", "int 2"}); }
+  { Asm a; a.u8(WHILE_BEGIN).pushBool(false).u8(WHILE_TEST).i32(5).u8(LOOP_BACK).i32(-13).halt(); expect_trace("while loop permits zero iterations", h, a.file(SCHEMA), {}); }
   { Asm a; a.local("int", 1).local("int", 1).pushInt(0).pushInt(3).u8(FOR_RANGE).u16(0).u16(1).i32(17).ctx("t", "Trace").u8(LOAD_LOCAL).u16(0).method(T_INT, 1).u8(FOR_NEXT).u16(1).i32(-17).halt(); expect_trace("range loop runs counter 0..2", h, a.file(SCHEMA), {"int 0", "int 1", "int 2"}); }
   { Asm a; a.local("int", 1).local("int", 1).pushInt(2).pushInt(2).u8(FOR_RANGE).u16(0).u16(1).i32(23).ctx("t", "Trace").pushInt(99).method(T_INT, 1).u8(FOR_NEXT).u16(1).i32(-23).halt(); expect_trace("empty range skips body", h, a.file(SCHEMA), {}); }
   { Asm a; a.local("int", 1).local("int", 1).local("int", 1).local("int", 1).pushInt(0).pushInt(2).u8(FOR_RANGE).u16(0).u16(1).i32(51).pushInt(0).pushInt(2).u8(FOR_RANGE).u16(2).u16(3).i32(17).ctx("t", "Trace").u8(LOAD_LOCAL).u16(2).method(T_INT, 1).u8(FOR_NEXT).u16(3).i32(-17).u8(FOR_NEXT).u16(1).i32(-51).halt(); expect_trace("nested ranges preserve inner counter", h, a.file(SCHEMA), {"int 0", "int 1", "int 0", "int 1"}); }
@@ -130,7 +133,8 @@ int main() {
   { Asm a; a.maxStack = 7; a.local("int").local("Thing", 1).line(0, 3, 5).line(9, 4, 1); a.pushInt(1).u8(STORE_LOCAL).u16(0).halt(); Program p = Program::load(a.file(SCHEMA), SCHEMA, h.reg); assert(p.max_stack() == 7 && p.locals().size() == 2 && p.locals()[1].type == "Thing" && p.locals()[1].hidden && !p.locals()[0].hidden); assert(p.lines().size() == 2 && p.line_of(0)->line == 3 && p.line_of(8)->line == 3 && p.line_of(9)->line == 4 && p.line_of(12)->column == 1); passed++; std::cout << "ok - max_stack, typed locals with hidden flags and the line table are read back\n"; }
   // Loader rejections (before anything runs).
   { Asm a; a.halt(); expect_error("bad magic", [&] { Program::load(a.file(SCHEMA, VERSION, "XXXX"), SCHEMA, h.reg); }, "bad magic"); }
-  { Asm a; a.halt(); expect_error("version 3 refused (no backward compatibility)", [&] { Program::load(a.file(SCHEMA, 3), SCHEMA, h.reg); }, "unsupported bytecode version 3 (this runtime reads version 4)"); }
+  { Asm a; a.halt(); expect_error("version 3 refused (no backward compatibility)", [&] { Program::load(a.file(SCHEMA, 3), SCHEMA, h.reg); }, "unsupported bytecode version 3 (this runtime reads version 5)"); }
+  { Asm a; a.halt(); expect_error("version 4 refused (no backward compatibility)", [&] { Program::load(a.file(SCHEMA, 4), SCHEMA, h.reg); }, "unsupported bytecode version 4 (this runtime reads version 5)"); }
   { Asm a; a.halt(); expect_error("schema mismatch", [&] { Program::load(a.file(SCHEMA), SCHEMA + " ", h.reg); }, "schema mismatch"); }
   { Asm a; a.ctx("t", "Trace").halt(); std::string f = a.file(SCHEMA); for (size_t n = 0; n < f.size(); ++n) { try { Program::load(f.substr(0, n), SCHEMA, h.reg); std::cerr << "FAIL truncation at " << n << " loaded\n"; return 1; } catch (const Error&) {} } passed++; std::cout << "ok - every truncation is refused\n"; expect_error("truncated", [&] { Program::load(f.substr(0, f.size() - 3), SCHEMA, h.reg); }, "bytecode is truncated"); }
   { Asm a; a.halt(); expect_error("trailing bytes", [&] { Program::load(a.file(SCHEMA) + "x", SCHEMA, h.reg); }, "trailing byte(s) after the line table"); }
@@ -150,10 +154,14 @@ int main() {
   { Asm a; a.u8(CALL_FN).u16(4).u8(0).halt(); expect_error("import index out of range", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "import index 4 out of range"); }
   { Asm a; a.u8(JUMP).i32(1).halt(); expect_error("jump into an operand", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "not an instruction start"); }
   { Asm a; a.u8(JUMP).i32(-5).halt(); expect_error("backward jump", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "goes backwards"); }
-  { Asm a; a.local("int", 1).local("int", 1).pushInt(0).pushInt(1).u8(FOR_RANGE).u16(0).u16(1).i32(10).halt(); expect_error("HALT cannot occur inside a range loop", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "HALT inside range loop"); }
+  { Asm a; a.u8(LOOP_BACK).i32(-5).halt(); expect_error("stray LOOP_BACK", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "has no matching WHILE_BEGIN"); }
+  { Asm a; a.u8(WHILE_BEGIN); expect_error("unpaired WHILE_BEGIN", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "unclosed WHILE_BEGIN"); }
+  { Asm a; a.u8(JUMP).i32(8).u8(WHILE_BEGIN).pushBool(false).u8(WHILE_TEST).i32(5).u8(LOOP_BACK).i32(-13).halt(); expect_error("ordinary jump cannot enter loop body", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "crosses a loop boundary"); }
+  { Asm a; a.u8(WHILE_BEGIN).pushBool(false).u8(WHILE_TEST); const size_t exit = a.code.size(); a.i32(0).pushInt(1).u8(LOOP_BACK); const size_t back = a.code.size(); a.i32(0); const size_t end = a.code.size(); a.patch(exit, end); a.patch(back, 0); a.halt(); expect_error("loop back requires the head stack depth", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "inconsistent operand stack depth at control-flow join"); }
+  { Asm a; a.local("int", 1).local("int", 1).pushInt(0).pushInt(1).u8(FOR_RANGE).u16(0).u16(1).i32(10).halt(); expect_error("HALT cannot occur inside a range loop", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "HALT inside loop"); }
   { Asm a; a.local("int", 1).local("int", 1).pushInt(0).pushInt(1).u8(FOR_RANGE).u16(0).u16(1).i32(10).u8(STORE_LOCAL).u16(0).u8(FOR_NEXT).u16(1).i32(-10).halt(); expect_error("loop counter is read-only", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "read-only range slot"); }
   { Asm a; a.local("int", 1).local("int", 1).pushInt(0).pushInt(1).u8(FOR_RANGE).u16(0).u16(1).i32(7).u8(FOR_NEXT).u16(1).i32(-7).pushInt(0).pushInt(1).u8(FOR_RANGE).u16(0).u16(1).i32(7).u8(FOR_NEXT).u16(1).i32(-7).halt(); expect_error("range slots cannot be reused by a sibling loop", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "already owned by another range loop"); }
-  { Asm a; a.local("int", 1).local("int", 1).local("int", 1).local("int", 1).pushInt(0).pushInt(1).u8(FOR_RANGE).u16(0).u16(1).i32(12).u8(JUMP).i32(34).u8(FOR_NEXT).u16(1).i32(-12).pushInt(0).pushInt(1).u8(FOR_RANGE).u16(2).u16(3).i32(7).u8(FOR_NEXT).u16(3).i32(-7).halt(); expect_error("ordinary jump cannot enter a sibling loop body", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "crosses a range-loop boundary"); }
+  { Asm a; a.local("int", 1).local("int", 1).local("int", 1).local("int", 1).pushInt(0).pushInt(1).u8(FOR_RANGE).u16(0).u16(1).i32(12).u8(JUMP).i32(34).u8(FOR_NEXT).u16(1).i32(-12).pushInt(0).pushInt(1).u8(FOR_RANGE).u16(2).u16(3).i32(7).u8(FOR_NEXT).u16(3).i32(-7).halt(); expect_error("ordinary jump cannot enter a sibling loop body", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "crosses a loop boundary"); }
   { Asm a; a.pushInt(1); expect_error("missing HALT", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "does not end with HALT"); }
   { Asm a; a.u8(0x7f).halt(); expect_error("unknown opcode", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "unknown opcode 127"); }
   { Asm a; a.u8(MATH).u8(18).halt(); expect_error("unknown MATH function", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "unknown MATH function 18"); }

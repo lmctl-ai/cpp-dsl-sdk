@@ -13,14 +13,18 @@
 #include <vector>
 
 struct Thing { int64_t id; };
+struct IntList { std::vector<int64_t> values{0, 1, 2, 3}; };
 struct Stub {
   std::vector<std::string> trace; std::vector<std::unique_ptr<Thing>> things; Thing root{0}, variable{0};
+  IntList xs;
   dslvm::Registry reg;
   Thing* make(int64_t id) { things.push_back(std::make_unique<Thing>(Thing{id})); return things.back().get(); }
   static std::string fmt(double f) { char buf[64]; std::snprintf(buf, sizeof buf, "%.15g", f); return buf; }
   Stub() {
     using namespace dslvm;
-    reg.context("t", "Trace").context("root", "Thing").context("v", "Var");
+    reg.context("t", "Trace").context("root", "Thing").context("v", "Var").context("xs", "IntList");
+    reg.method("IntList", "len", {}, "int", [](void* self, Args&) { return Value::integer(int64_t(static_cast<IntList*>(self)->values.size())); });
+    reg.method("IntList", "at", {"int"}, "int", [](void* self, Args& a) { return Value::integer(static_cast<IntList*>(self)->values.at(size_t(a[0].i))); });
     reg.method("Trace", "int", {"int"}, "void", [&](void*, Args& a) { trace.push_back("int " + std::to_string(a[0].i)); return Value::none(); });
     reg.method("Trace", "float", {"float"}, "void", [&](void*, Args& a) { trace.push_back("float " + fmt(a[0].f)); return Value::none(); });
     reg.method("Trace", "str", {"string"}, "void", [&](void*, Args& a) { trace.push_back("str " + a[0].s); return Value::none(); });
@@ -96,7 +100,7 @@ int main(int argc, char** argv) {
       if (p != std::string::npos) { size_t q = mf.find("\"schema\": \"", p), next = mf.find("\"name\": \"", p + 1); if (q != std::string::npos && q < next) { q += 11; schemaFile = dir + "/" + mf.substr(q, mf.find('"', q) - q); } } }
     std::string bytes = dslvm::read_file(dir + "/" + name + ".dslb"), schema = dslvm::read_file(schemaFile);
     Stub stub; std::string result, error; bool loaded = false, ran = false;
-    try { dslvm::Program p = dslvm::Program::load(bytes, schema, stub.reg); loaded = true; dslvm::Context c; c.set("t", &stub.trace); c.set("root", &stub.root); c.set("v", &stub.variable); p.run(c, stub.reg); ran = true; }
+    try { dslvm::Program p = dslvm::Program::load(bytes, schema, stub.reg); loaded = true; dslvm::Context c; c.set("t", &stub.trace); c.set("root", &stub.root); c.set("v", &stub.variable); c.set("xs", &stub.xs); p.run(c, stub.reg); ran = true; }
     catch (const dslvm::Error& e) { error = e.what(); }
     bool ok;
     if (kind == "trace") {
