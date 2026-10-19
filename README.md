@@ -163,3 +163,7 @@ the same files; nothing in the vectors is C++-specific.
 Hosts keep a verbatim copy at `cpp/dslvm.hpp` plus `sdk.lock` (SDK commit and the header's sha256) and `scripts/sync-sdk.sh`,
 which copies the header from a sibling checkout `../cpp-dsl-sdk` and rewrites the lock; each host's `test.sh` fails when the
 vendored header's hash differs from the lock. Example hosts: lmcad (CAD/rendering), lmhtml (HTML tooling), lmor-dsl (OR-Tools).
+
+## License
+
+This project, including `include/dslvm.hpp` and the optional `stdlib/` catalog, is licensed under the MIT License. See [`LICENSE`](LICENSE). These are project-authored files and require no additional third-party notices.
