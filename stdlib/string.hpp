@@ -47,9 +47,21 @@ inline int64_t str_find(const std::string& s, const std::string& needle) {
 }
 // Replaces every non-overlapping occurrence; an empty search string is a no-op.
 inline std::string str_replace(const std::string& s, const std::string& from, const std::string& to) {
-  if (from.empty()) return s;
-  std::string out;
+  constexpr size_t max_bytes = 64u * 1024u * 1024u;
+  size_t result_size = 0;
+  auto add_size = [&](size_t n) {
+    if (n > max_bytes - result_size) throw Error("str_replace: result must be at most 67108864 bytes");
+    result_size += n;
+  };
+  if (from.empty()) { add_size(s.size()); return s; }
+  // Preflight the exact result size, without overflowing or allocating output.
   size_t at = 0, found;
+  while ((found = s.find(from, at)) != std::string::npos) {
+    add_size(found - at); add_size(to.size()); at = found + from.size();
+  }
+  add_size(s.size() - at);
+  std::string out; out.reserve(result_size);
+  at = 0;
   while ((found = s.find(from, at)) != std::string::npos) {
     out.append(s, at, found - at); out += to; at = found + from.size();
   }

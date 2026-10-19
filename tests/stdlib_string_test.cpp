@@ -23,6 +23,15 @@ int main(int argc, char** argv) {
   check(str_find("abcabc", "bc") == 1 && str_find("abc", "z") == -1 && str_find("abc", "") == 0);
   check(str_replace("a-b-a", "a", "xy") == "xy-b-xy" && str_replace("abc", "", "x") == "abc");
   check(str_replace(std::string("a\0a", 3), std::string("\0", 1), "X") == "aXa");
+  {
+    const std::string megabyte(1024 * 1024, 'x');
+    bool refused = false;
+    try { (void)str_replace(std::string(65, 'x'), "x", megabyte); }
+    catch (const dslvm::Error& e) { refused = e.code == "RUN_HOST" && e.message == "str_replace: result must be at most 67108864 bytes"; }
+    check(refused);
+    check(str_replace(std::string(64, 'x'), "x", megabyte).size() == 64u * 1024u * 1024u);
+    check(str_replace("aaaaa", "aa", "b") == "bba" && str_replace("aaa", "a", "").empty());
+  }
   check(str_trim(" \tvalue\r\n") == "value" && str_trim("\xC2\xA0x\xC2\xA0") == "\xC2\xA0x\xC2\xA0");
   check(str_repeat("xy", 3) == "xyxyxy" && str_repeat("x", 0).empty() && str_repeat("", INT64_MAX).empty());
   bool repeat_refused = false; try { (void)str_repeat("ab", INT64_MAX); } catch (const dslvm::Error&) { repeat_refused = true; }

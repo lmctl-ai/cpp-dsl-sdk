@@ -104,7 +104,8 @@ that directory). Set one of those in a different checkout.
 String operations use byte offsets, byte lengths, and byte matching; UTF-8 is not decoded. `str_lower` and `str_upper` only map
 ASCII letters. `str_substr(s,start,count)` clamps negative starts to zero and overlong counts to the end; negative counts or starts
 beyond the end return empty. `str_find` returns `-1` when absent. `str_replace` replaces non-overlapping matches and leaves the
-input unchanged for an empty search string. `str_trim` removes ASCII space and bytes `0x09` through `0x0d`. Integer and float
+input unchanged for an empty search string. It preflights the result size before allocation and throws `dslvm::Error`
+(code `RUN_HOST`, message `str_replace: result must be at most 67108864 bytes`) above 64 MiB, including no-op copies. `str_trim` removes ASCII space and bytes `0x09` through `0x0d`. Integer and float
 parsing require a complete, in-range decimal token; `str_to_int`/`str_to_float` return zero on failure, and `str_is_int`/
 `str_is_float` distinguish failure (float `nan`/infinity are invalid). `str_repeat` rejects negative counts and results above
 64 MiB with `dslvm::Error`. `str_match` supports `*`, `?`, byte classes/ranges, `[!class]`, and backslash escapes; it uses a
