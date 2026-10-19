@@ -1,43 +1,57 @@
-// Unit tests of the SDK runtime: a tiny in-test assembler builds valid and invalid bytecode; every verifier rejection,
-// the run-time checks and the resource limits are exercised. Build and run: make test
+// Unit tests of the SDK runtime: a tiny in-test assembler builds valid and invalid bytecode v4; every verifier rejection and
+// the run-time checks are exercised, and the absence of limits is pinned. Build and run: make test
 #include "dslvm.hpp"
 #include <cassert>
 #include <cstdio>
 #include <functional>
 #include <iostream>
 #include <string>
+#include <tuple>
 #include <vector>
 
 using namespace dslvm;
 static int passed = 0;
 
 struct Asm {
-  std::vector<std::string> consts; std::string code; uint16_t locals = 0;
-  uint16_t k(const std::string& s) { for (size_t i = 0; i < consts.size(); ++i) if (consts[i] == s) return uint16_t(i); consts.push_back(s); return uint16_t(consts.size() - 1); }
+  std::vector<std::string> consts; std::vector<uint32_t> imports; std::vector<std::pair<uint32_t, uint32_t>> contexts;
+  std::vector<std::pair<uint32_t, uint8_t>> locals; uint16_t maxStack = 0; std::string code; std::vector<std::tuple<uint32_t, uint32_t, uint16_t>> lines;
+  uint32_t k(const std::string& s) { for (size_t i = 0; i < consts.size(); ++i) if (consts[i] == s) return uint32_t(i); consts.push_back(s); return uint32_t(consts.size() - 1); }
+  uint16_t imp(const std::string& canonical) { uint32_t c = k(canonical); for (size_t i = 0; i < imports.size(); ++i) if (imports[i] == c) return uint16_t(i); imports.push_back(c); return uint16_t(imports.size() - 1); }
+  uint16_t ctxIndex(const std::string& name, const std::string& type) { std::pair<uint32_t, uint32_t> e{k(name), k(type)}; for (size_t i = 0; i < contexts.size(); ++i) if (contexts[i] == e) return uint16_t(i); contexts.push_back(e); return uint16_t(contexts.size() - 1); }
+  Asm& local(const std::string& type, uint8_t hidden = 0) { locals.emplace_back(k(type), hidden); return *this; }
+  Asm& line(uint32_t pc, uint32_t ln, uint16_t col) { lines.emplace_back(pc, ln, col); return *this; }
   Asm& u8(unsigned v) { code.push_back(char(v)); return *this; }
   Asm& u16(unsigned v) { code.push_back(char(v >> 8)); code.push_back(char(v)); return *this; }
-  Asm& i32(int32_t v) { uint32_t u = uint32_t(v); for (int i = 3; i >= 0; --i) code.push_back(char((u >> (i * 8)) & 0xff)); return *this; }
+  Asm& u32(uint32_t v) { for (int i = 3; i >= 0; --i) code.push_back(char((v >> (i * 8)) & 0xff)); return *this; }
+  Asm& i32(int32_t v) { return u32(uint32_t(v)); }
+  Asm& i64(int64_t v) { uint64_t u = uint64_t(v); for (int i = 7; i >= 0; --i) code.push_back(char((u >> (i * 8)) & 0xff)); return *this; }
   Asm& f64(double d) { uint64_t bits; std::memcpy(&bits, &d, 8); for (int i = 7; i >= 0; --i) code.push_back(char((bits >> (i * 8)) & 0xff)); return *this; }
-  Asm& pushInt(int32_t v) { return u8(PUSH_INT).i32(v); }
+  Asm& pushInt(int64_t v) { return u8(PUSH_INT).i64(v); }
   Asm& pushFloat(double v) { return u8(PUSH_FLOAT).f64(v); }
-  Asm& pushStr(const std::string& s) { return u8(PUSH_STR).u16(k(s)); }
+  Asm& pushStr(const std::string& s) { return u8(PUSH_STR).u32(k(s)); }
   Asm& pushBool(bool b) { return u8(PUSH_BOOL).u8(b ? 1 : 0); }
-  Asm& ctx(const std::string& n) { return u8(LOAD_CTX).u16(k(n)); }
-  Asm& fn(const std::string& n, unsigned argc) { return u8(CALL_FN).u16(k(n)).u8(argc); }
-  Asm& method(const std::string& t, const std::string& n, unsigned argc) { return u8(CALL_METHOD).u16(k(t)).u16(k(n)).u8(argc); }
+  Asm& ctx(const std::string& n, const std::string& type) { return u8(LOAD_CTX).u16(ctxIndex(n, type)); }
+  Asm& fn(const std::string& canonical, unsigned argc) { return u8(CALL_FN).u16(imp(canonical)).u8(argc); }
+  Asm& method(const std::string& canonical, unsigned argc) { return u8(CALL_METHOD).u16(imp(canonical)).u8(argc); }
   Asm& halt() { return u8(HALT); }
+  static void be16(std::string& o, unsigned v) { o.push_back(char(v >> 8)); o.push_back(char(v)); }
+  static void be32(std::string& o, uint32_t v) { for (int i = 3; i >= 0; --i) o.push_back(char((v >> (i * 8)) & 0xff)); }
   std::string file(const std::string& schema, uint16_t version = VERSION, const std::string& magic = "DSLB") const {
-    std::string out = magic; out.push_back(char(version >> 8)); out.push_back(char(version)); out += sha256(schema);
-    out.push_back(char(consts.size() >> 8)); out.push_back(char(consts.size()));
-    for (auto& c : consts) { out.push_back(char(c.size() >> 8)); out.push_back(char(c.size())); out += c; }
-    out.push_back(char(locals >> 8)); out.push_back(char(locals));
-    uint32_t n = uint32_t(code.size()); for (int i = 3; i >= 0; --i) out.push_back(char((n >> (i * 8)) & 0xff));
-    return out + code;
+    std::string out = magic; be16(out, version); out += sha256(schema);
+    be32(out, uint32_t(consts.size())); for (auto& c : consts) { out.push_back(1); be32(out, uint32_t(c.size())); out += c; }
+    be16(out, unsigned(imports.size())); for (auto i : imports) be32(out, i);
+    be16(out, unsigned(contexts.size())); for (auto& c : contexts) { be32(out, c.first); be32(out, c.second); }
+    be16(out, unsigned(locals.size())); for (auto& l : locals) { be32(out, l.first); out.push_back(char(l.second)); }
+    be16(out, maxStack);
+    be32(out, uint32_t(code.size())); out += code;
+    be32(out, uint32_t(lines.size())); for (auto& l : lines) { be32(out, std::get<0>(l)); be32(out, std::get<1>(l)); be16(out, std::get<2>(l)); }
+    return out;
   }
 };
 
 static const std::string SCHEMA = "{\"dsl.schema\":1,\"name\":\"t\"}";  // only its bytes matter to the runtime
-struct Thing { int id; };
+static const std::string T_INT = "method Trace.int(int) -> void", T_STR = "method Trace.str(string) -> void", THING_ID = "method Thing.id() -> int", TWICE = "fn twice(int) -> int", BOOM = "fn boom() -> void";
+struct Thing { int64_t id; };
 struct Host {
   std::vector<std::string> trace; Thing root{0};
   Registry reg;
@@ -63,55 +77,70 @@ static void expect_trace(const std::string& label, Host& h, const std::string& b
 
 int main() {
   Host h;
+  const int64_t MAX = INT64_MAX, MIN = INT64_MIN;
   // Valid programs.
-  { Asm a; a.ctx("t").pushInt(1).pushInt(2).u8(ADD_I).method("Trace", "int", 1).ctx("t").pushStr("a").pushStr("b").u8(CONCAT).method("Trace", "str", 1).halt(); expect_trace("arithmetic, concat, method calls", h, a.file(SCHEMA), {"int 3", "str ab"}); }
-  { Asm a; a.locals = 1; a.pushInt(21).fn("twice", 1).u8(STORE_LOCAL).u16(0).ctx("t").u8(LOAD_LOCAL).u16(0).method("Trace", "int", 1).halt(); expect_trace("host function and locals", h, a.file(SCHEMA), {"int 42"}); }
-  { Asm a; a.pushBool(true).u8(JUMP_IF_FALSE).i32(19).ctx("t").pushInt(1).method("Trace", "int", 1).u8(JUMP).i32(14).ctx("t").pushInt(2).method("Trace", "int", 1).halt(); expect_trace("forward jumps select a branch", h, a.file(SCHEMA), {"int 1"}); }
-  { Asm a; a.ctx("t").ctx("root").method("Thing", "id", 0).method("Trace", "int", 1).ctx("t").pushFloat(2.5).u8(F2S).method("Trace", "str", 1).ctx("t").pushInt(7).pushInt(2).u8(DIV_I).u8(I2F).pushFloat(0.5).u8(ADD_F).u8(F2S).method("Trace", "str", 1).ctx("t").pushInt(3).pushInt(3).u8(EQ).u8(B2S).method("Trace", "str", 1).halt(); expect_trace("context object, floats, conversions, equality", h, a.file(SCHEMA), {"int 0", "str 2.5", "str 3.5", "str true"}); }
-  { Asm a; a.halt(); Program p = Program::load(a.file(SCHEMA), SCHEMA, h.reg); assert(p.constant_count() == 0 && p.code_size() == 1); passed++; std::cout << "ok - empty program loads\n"; }
+  { Asm a; a.ctx("t", "Trace").pushInt(1).pushInt(2).u8(ADD_I).method(T_INT, 1).ctx("t", "Trace").pushStr("a").pushStr("b").u8(CONCAT).method(T_STR, 1).halt(); expect_trace("arithmetic, concat, method calls", h, a.file(SCHEMA), {"int 3", "str ab"}); }
+  { Asm a; a.local("int"); a.pushInt(21).fn(TWICE, 1).u8(STORE_LOCAL).u16(0).ctx("t", "Trace").u8(LOAD_LOCAL).u16(0).method(T_INT, 1).halt(); expect_trace("host function and locals", h, a.file(SCHEMA), {"int 42"}); }
+  { Asm a; a.pushBool(true).u8(JUMP_IF_FALSE).i32(21).ctx("t", "Trace").pushInt(1).method(T_INT, 1).u8(JUMP).i32(16).ctx("t", "Trace").pushInt(2).method(T_INT, 1).halt(); expect_trace("forward jumps select a branch", h, a.file(SCHEMA), {"int 1"}); }
+  { Asm a; a.ctx("t", "Trace").ctx("root", "Thing").method(THING_ID, 0).method(T_INT, 1).ctx("t", "Trace").pushFloat(2.5).u8(F2S).method(T_STR, 1).ctx("t", "Trace").pushInt(7).pushInt(2).u8(DIV_I).u8(I2F).pushFloat(0.5).u8(ADD_F).u8(F2S).method(T_STR, 1).ctx("t", "Trace").pushInt(3).pushInt(3).u8(EQ).u8(B2S).method(T_STR, 1).halt(); expect_trace("context object, floats, conversions, equality", h, a.file(SCHEMA), {"int 0", "str 2.5", "str 3.5", "str true"}); }
+  { Asm a; a.halt(); Program p = Program::load(a.file(SCHEMA), SCHEMA, h.reg); assert(p.constant_count() == 0 && p.code_size() == 1 && p.import_count() == 0 && p.local_count() == 0 && p.lines().empty()); passed++; std::cout << "ok - empty program loads\n"; }
+  // v4 integers: 64-bit two's complement, wraparound, MOD_I.
+  { Asm a; a.ctx("t", "Trace").pushInt(MAX).method(T_INT, 1).ctx("t", "Trace").pushInt(MIN).method(T_INT, 1).ctx("t", "Trace").pushInt(4611686018427387904).pushInt(2).u8(MUL_I).pushInt(1).u8(SUB_I).method(T_INT, 1).halt(); expect_trace("int64 literals and arithmetic", h, a.file(SCHEMA), {"int 9223372036854775807", "int -9223372036854775808", "int 9223372036854775807"}); }
+  { Asm a; a.ctx("t", "Trace").pushInt(MAX).pushInt(1).u8(ADD_I).method(T_INT, 1).ctx("t", "Trace").pushInt(MIN).u8(NEG_I).method(T_INT, 1).ctx("t", "Trace").pushInt(MIN).pushInt(-1).u8(DIV_I).method(T_INT, 1).ctx("t", "Trace").pushInt(MIN).pushInt(-1).u8(MOD_I).method(T_INT, 1).ctx("t", "Trace").pushInt(MIN).pushInt(1).u8(SUB_I).method(T_INT, 1).ctx("t", "Trace").pushInt(MAX).pushInt(MAX).u8(MUL_I).method(T_INT, 1).halt(); expect_trace("wraparound: no overflow trap (R34)", h, a.file(SCHEMA), {"int -9223372036854775808", "int -9223372036854775808", "int -9223372036854775808", "int 0", "int 9223372036854775807", "int 1"}); }
+  { Asm a; a.ctx("t", "Trace").pushInt(7).pushInt(3).u8(MOD_I).method(T_INT, 1).ctx("t", "Trace").pushInt(-7).pushInt(3).u8(MOD_I).method(T_INT, 1).ctx("t", "Trace").pushInt(7).pushInt(-3).u8(MOD_I).method(T_INT, 1).ctx("t", "Trace").pushInt(-7).pushInt(2).u8(DIV_I).method(T_INT, 1).halt(); expect_trace("MOD_I takes the dividend's sign; DIV_I truncates toward zero", h, a.file(SCHEMA), {"int 1", "int -1", "int 1", "int -3"}); }
+  // Sections: max_stack is recorded, the line table is kept and queried, hidden locals are flagged.
+  { Asm a; a.maxStack = 7; a.local("int").local("Thing", 1).line(0, 3, 5).line(9, 4, 1); a.pushInt(1).u8(STORE_LOCAL).u16(0).halt(); Program p = Program::load(a.file(SCHEMA), SCHEMA, h.reg); assert(p.max_stack() == 7 && p.locals().size() == 2 && p.locals()[1].type == "Thing" && p.locals()[1].hidden && !p.locals()[0].hidden); assert(p.lines().size() == 2 && p.line_of(0)->line == 3 && p.line_of(8)->line == 3 && p.line_of(9)->line == 4 && p.line_of(12)->column == 1); passed++; std::cout << "ok - max_stack, typed locals with hidden flags and the line table are read back\n"; }
   // Loader rejections (before anything runs).
   { Asm a; a.halt(); expect_error("bad magic", [&] { Program::load(a.file(SCHEMA, VERSION, "XXXX"), SCHEMA, h.reg); }, "bad magic"); }
-  { Asm a; a.halt(); expect_error("other version", [&] { Program::load(a.file(SCHEMA, 2), SCHEMA, h.reg); }, "unsupported bytecode version 2 (this runtime reads version 3)"); }
+  { Asm a; a.halt(); expect_error("version 3 refused (no backward compatibility)", [&] { Program::load(a.file(SCHEMA, 3), SCHEMA, h.reg); }, "unsupported bytecode version 3 (this runtime reads version 4)"); }
   { Asm a; a.halt(); expect_error("schema mismatch", [&] { Program::load(a.file(SCHEMA), SCHEMA + " ", h.reg); }, "schema mismatch"); }
-  { Asm a; a.ctx("t").halt(); std::string f = a.file(SCHEMA); expect_error("truncated", [&] { Program::load(f.substr(0, f.size() - 3), SCHEMA, h.reg); }, "bytecode is truncated"); }
-  { Asm a; a.halt(); expect_error("trailing bytes", [&] { Program::load(a.file(SCHEMA) + "x", SCHEMA, h.reg); }, "trailing byte"); }
-  { Asm a; a.u8(PUSH_STR).u16(9).halt(); expect_error("constant index out of range", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "constant index 9 out of range"); }
-  { Asm a; a.u8(LOAD_LOCAL).u16(0).halt(); expect_error("local slot out of range", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "local slot 0 out of range"); }
-  { Asm a; a.ctx("nope").halt(); expect_error("undeclared context", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "context variable 'nope' is not declared"); }
-  { Asm a; a.fn("missing", 0).halt(); expect_error("unbound function", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "host function 'missing' is not bound"); }
-  { Asm a; a.pushInt(1).fn("twice", 2).halt(); expect_error("function arity", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "takes 1 argument(s), bytecode passes 2"); }
-  { Asm a; a.ctx("root").method("Thing", "name", 0).halt(); expect_error("unbound method", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "method 'Thing.name' is not bound"); }
-  { Asm a; a.ctx("root").pushInt(1).method("Thing", "id", 1).halt(); expect_error("method arity", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "method 'Thing.id' takes 0 argument(s), bytecode passes 1"); }
+  { Asm a; a.ctx("t", "Trace").halt(); std::string f = a.file(SCHEMA); for (size_t n = 0; n < f.size(); ++n) { try { Program::load(f.substr(0, n), SCHEMA, h.reg); std::cerr << "FAIL truncation at " << n << " loaded\n"; return 1; } catch (const Error&) {} } passed++; std::cout << "ok - every truncation is refused\n"; expect_error("truncated", [&] { Program::load(f.substr(0, f.size() - 3), SCHEMA, h.reg); }, "bytecode is truncated"); }
+  { Asm a; a.halt(); expect_error("trailing bytes", [&] { Program::load(a.file(SCHEMA) + "x", SCHEMA, h.reg); }, "trailing byte(s) after the line table"); }
+  { Asm a; a.pushStr("x").halt(); std::string f = a.file(SCHEMA); f[4 + 2 + 32 + 4] = 7; expect_error("unknown constant tag", [&] { Program::load(f, SCHEMA, h.reg); }, "constant 0 has unknown tag 7 (1 = string)"); }
+  { Asm a; a.u8(PUSH_STR).u32(9).halt(); expect_error("constant index out of range", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "constant index 9 out of range"); }
+  { Asm a; a.u8(LOAD_LOCAL).u16(0).halt(); expect_error("local slot out of range", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "local slot index 0 out of range"); }
+  { Asm a; a.u8(LOAD_CTX).u16(0).halt(); expect_error("context index out of range", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "context index 0 out of range"); }
+  { Asm a; a.ctx("nope", "Trace").halt(); expect_error("undeclared context", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "context variable 'nope' is not declared"); }
+  { Asm a; a.ctx("t", "Thing").halt(); expect_error("context type differs", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "context variable 't' is declared as Thing by the bytecode, the host provides Trace"); }
+  { Asm a; a.fn("fn missing() -> int", 0).halt(); expect_error("unbound function import", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "import 'fn missing() -> int' is not provided by the host"); }
+  { Asm a; a.pushFloat(1.0).fn("fn twice(float) -> int", 1).halt(); expect_error("import with other types names the host's signature", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "import 'fn twice(float) -> int' is not provided by the host (the host declares fn twice(int) -> int)"); }
+  { Asm a; a.ctx("root", "Thing").method("method Thing.name() -> string", 0).halt(); expect_error("unbound method import", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "import 'method Thing.name() -> string' is not provided by the host"); }
+  { Asm a; a.ctx("root", "Thing").method("method Thing.id(int) -> int", 1).halt(); expect_error("method import with other types", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "(the host declares method Thing.id() -> int)"); }
+  { Asm a; a.pushInt(1).pushInt(2).fn(TWICE, 2).halt(); expect_error("CALL_FN arity differs from the import", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "passes 2 argument(s), the import takes 1"); }
+  { Asm a; a.ctx("root", "Thing").fn(THING_ID, 0).halt(); expect_error("CALL_FN on a method import", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "which is a method"); }
+  { Asm a; a.pushInt(1).method(TWICE, 1).halt(); expect_error("CALL_METHOD on a function import", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "which is a function"); }
+  { Asm a; a.u8(CALL_FN).u16(4).u8(0).halt(); expect_error("import index out of range", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "import index 4 out of range"); }
   { Asm a; a.u8(JUMP).i32(1).halt(); expect_error("jump into an operand", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "not an instruction start"); }
   { Asm a; a.u8(JUMP).i32(-5).halt(); expect_error("backward jump", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "goes backwards"); }
   { Asm a; a.pushInt(1); expect_error("missing HALT", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "does not end with HALT"); }
   { Asm a; a.u8(0x7f).halt(); expect_error("unknown opcode", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "unknown opcode 127"); }
   { Asm a; a.u8(PUSH_BOOL).u8(2).halt(); expect_error("bad bool operand", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "PUSH_BOOL operand must be 0 or 1"); }
-  { Asm a; a.locals = 5000; a.halt(); expect_error("too many locals", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "too many locals"); }
-  // Run-time checks (a correct compiler never produces these; the VM stays defensive).
+  { Asm a; a.local("int", 2); a.halt(); expect_error("bad hidden flag", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "hidden flag must be 0 or 1"); }
+  { Asm a; a.line(5, 1, 1).line(2, 2, 1); a.pushInt(1).u8(POP).halt(); expect_error("unsorted line table", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "line table is not sorted"); }
+  { Asm a; a.line(99, 1, 1); a.halt(); expect_error("line entry beyond the code", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "beyond the code"); }
+  // Run-time checks (a correct compiler never produces these; the VM stays defensive). Overflow is not one of them (R34).
   { Asm a; a.pushInt(1).pushInt(0).u8(DIV_I).halt(); expect_error("int division by zero", [&] { h.run(a.file(SCHEMA)); }, "int division by zero"); }
-  { Asm a; a.pushInt(2147483647).pushInt(1).u8(ADD_I).halt(); expect_error("int overflow", [&] { h.run(a.file(SCHEMA)); }, "int overflow"); }
-  { Asm a; a.pushInt(INT32_MIN).u8(NEG_I).halt(); expect_error("negating the smallest int", [&] { h.run(a.file(SCHEMA)); }, "negating the smallest int"); }
+  { Asm a; a.pushInt(1).pushInt(0).u8(MOD_I).halt(); expect_error("int modulo by zero", [&] { h.run(a.file(SCHEMA)); }, "int modulo by zero"); }
   { Asm a; a.pushInt(1).pushStr("x").u8(EQ).halt(); expect_error("mixed-kind equality", [&] { h.run(a.file(SCHEMA)); }, "cannot compare int with string"); }
   { Asm a; a.pushInt(1).pushFloat(1.0).u8(ADD_F).halt(); expect_error("float op on int", [&] { h.run(a.file(SCHEMA)); }, "float operator applied to int and float"); }
-  { Asm a; a.locals = 1; a.u8(LOAD_LOCAL).u16(0).halt(); expect_error("local read before store", [&] { h.run(a.file(SCHEMA)); }, "read before assignment"); }
+  { Asm a; a.local("int"); a.u8(LOAD_LOCAL).u16(0).halt(); expect_error("local read before store", [&] { h.run(a.file(SCHEMA)); }, "read before assignment"); }
   { Asm a; a.pushInt(1).u8(JUMP_IF_FALSE).i32(0).halt(); expect_error("non-bool condition", [&] { h.run(a.file(SCHEMA)); }, "condition is a int, not a bool"); }
   { Asm a; a.u8(POP).halt(); expect_error("stack underflow", [&] { h.run(a.file(SCHEMA)); }, "stack underflow"); }
-  { Asm a; a.fn("boom", 0).halt(); expect_error("host error propagates", [&] { h.run(a.file(SCHEMA)); }, "boom from the host"); }
-  { Asm a; a.ctx("t").halt(); Program p = Program::load(a.file(SCHEMA), SCHEMA, h.reg); Context empty; expect_error("context object missing at run", [&] { p.run(empty, h.reg); }, "context variable 't' was not provided by the host for this run"); }
-  { Asm a; a.ctx("t").method("Thing", "id", 0).halt(); expect_error("method on the wrong object type", [&] { h.run(a.file(SCHEMA)); }, "method Thing.id called on a Trace"); }
+  { Asm a; a.fn(BOOM, 0).halt(); expect_error("host error propagates", [&] { h.run(a.file(SCHEMA)); }, "boom from the host"); }
+  { Asm a; a.ctx("t", "Trace").halt(); Program p = Program::load(a.file(SCHEMA), SCHEMA, h.reg); Context empty; expect_error("context object missing at run", [&] { p.run(empty, h.reg); }, "context variable 't' was not provided by the host for this run"); }
+  { Asm a; a.ctx("t", "Trace").method(THING_ID, 0).halt(); expect_error("method on the wrong object type", [&] { h.run(a.file(SCHEMA)); }, "method Thing.id called on a Trace"); }
   // S0' (spec v4 A02/A03): signatures, duplicate registrations, error codes, the result line.
   { auto sigs = h.reg.signatures(); std::vector<std::string> want = {"context root: Thing", "context t: Trace", "fn boom() -> void", "fn twice(int) -> int", "method Thing.id() -> int", "method Trace.int(int) -> void", "method Trace.str(string) -> void"}; assert(sigs == want); passed++; std::cout << "ok - signatures() lists the sorted canonical strings\n"; }
   { Registry dup; dup.function("f", {}, "void", [](Args&) { return Value::none(); }); expect_error("duplicate registration", [&] { dup.function("f", {}, "void", [](Args&) { return Value::none(); }); }, "registered twice"); }
-  { Asm a; a.fn("missing", 0).halt(); try { Program::load(a.file(SCHEMA), SCHEMA, h.reg); } catch (const Error& e) { assert(e.code == "LOAD_UNBOUND"); passed++; std::cout << "ok - unbound names carry LOAD_UNBOUND\n"; } }
+  { Asm a; a.fn("fn missing() -> void", 0).halt(); try { Program::load(a.file(SCHEMA), SCHEMA, h.reg); } catch (const Error& e) { assert(e.code == "LOAD_UNBOUND"); passed++; std::cout << "ok - unbound imports carry LOAD_UNBOUND\n"; } }
   { Asm a; a.halt(); try { Program::load(a.file(SCHEMA), SCHEMA + " ", h.reg); } catch (const Error& e) { assert(e.code == "LOAD_SCHEMA_MISMATCH"); passed++; std::cout << "ok - schema mismatch carries LOAD_SCHEMA_MISMATCH\n"; } }
   { Asm a; a.halt(); try { Program::load(a.file(SCHEMA, VERSION, "XXXX"), SCHEMA, h.reg); } catch (const Error& e) { assert(e.code == "LOAD_BAD_BYTECODE"); passed++; std::cout << "ok - malformed files carry LOAD_BAD_BYTECODE\n"; } }
-  { Asm a; a.fn("boom", 0).halt(); try { h.run(a.file(SCHEMA)); } catch (const Error& e) { assert(e.code == "RUN_HOST"); passed++; std::cout << "ok - host-thrown errors carry RUN_HOST\n"; } }
+  { Asm a; a.fn(BOOM, 0).halt(); try { h.run(a.file(SCHEMA)); } catch (const Error& e) { assert(e.code == "RUN_HOST"); passed++; std::cout << "ok - host-thrown errors carry RUN_HOST\n"; } }
   { Asm a; a.pushInt(1).pushInt(0).u8(DIV_I).halt(); try { h.run(a.file(SCHEMA)); } catch (const Error& e) { assert(e.code == "RUN_ERROR"); passed++; std::cout << "ok - VM errors carry RUN_ERROR\n"; } }
   { assert(report_error("load", Error("LOAD_UNBOUND", "x")) == 3); assert(report_error("run", Error("host said no")) == 3); assert(report_app_failure("nothing to do") == 4); assert(report_ok("42") == 0); assert(json_escape("a\"b\n") == "\"a\\\"b\\n\""); passed++; std::cout << "ok - result lines and exit codes 3 (load/run) and 4 (application)\n"; }
-  // Resource limits.
-  { Asm a; for (size_t i = 0; i <= MAX_STACK; ++i) a.pushInt(1); a.halt(); expect_error("operand stack limit", [&] { h.run(a.file(SCHEMA)); }, "operand stack exceeds 1024 values"); }
-  { Asm a; a.pushStr(std::string(65535, 'x')); for (int i = 0; i < 9; ++i) a.u8(DUP).u8(CONCAT); a.halt(); expect_error("concatenation size limit", [&] { h.run(a.file(SCHEMA)); }, "string + result exceeds"); }
+  // No limits (operator decision 2026-10-18): deep stacks and large strings are the host's memory to spend, not the VM's to refuse.
+  { Asm a; a.maxStack = 1; for (int i = 0; i < 5000; ++i) a.pushInt(1); for (int i = 0; i < 4999; ++i) a.u8(ADD_I); a.ctx("t", "Trace").u8(DUP).u8(POP); a.halt(); Program p = Program::load(a.file(SCHEMA), SCHEMA, h.reg); Context c; c.set("t", &h.trace); p.run(c, h.reg); passed++; std::cout << "ok - 5000 operands on the stack run without a cap (max_stack is a reservation hint only)\n"; }
+  { Asm a; a.ctx("t", "Trace").pushStr(std::string(65536, 'x')); for (int i = 0; i < 9; ++i) a.u8(DUP).u8(CONCAT); a.method(T_STR, 1).halt(); auto got = h.run(a.file(SCHEMA)); assert(got.size() == 1 && got[0].size() == 4 + 65536u * 512u); passed++; std::cout << "ok - a 32 MiB concatenation succeeds (no string cap)\n"; }
   std::cout << "PASS " << passed << " checks\n";
   return 0;
 }

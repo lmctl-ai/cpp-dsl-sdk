@@ -11,11 +11,11 @@
 #include <sstream>
 #include <vector>
 
-struct Thing { int id; };
+struct Thing { int64_t id; };
 struct Stub {
   std::vector<std::string> trace; std::vector<std::unique_ptr<Thing>> things; Thing root{0};
   dslvm::Registry reg;
-  Thing* make(int id) { things.push_back(std::make_unique<Thing>(Thing{id})); return things.back().get(); }
+  Thing* make(int64_t id) { things.push_back(std::make_unique<Thing>(Thing{id})); return things.back().get(); }
   static std::string fmt(double f) { char buf[64]; std::snprintf(buf, sizeof buf, "%.15g", f); return buf; }
   Stub() {
     using namespace dslvm;
@@ -50,7 +50,8 @@ int main(int argc, char** argv) {
   for (const std::string& name : names) {
     std::ifstream ex(dir + "/" + name + ".expect"); std::string kind; std::getline(ex, kind); std::vector<std::string> lines; for (std::string l; std::getline(ex, l);) lines.push_back(unescape(l));
     std::string schemaFile = dir + "/schema.json";
-    { std::ifstream m(dir + "/manifest.json"); std::stringstream ss; ss << m.rdbuf(); std::string mf = ss.str(); size_t p = mf.find("\"name\": \"" + name + "\""); if (p != std::string::npos && mf.find("\"schema\": \"schema-extra.json\"", p) < mf.find("\"name\": \"", p + 1)) schemaFile = dir + "/schema-extra.json"; }
+    { std::ifstream m(dir + "/manifest.json"); std::stringstream ss; ss << m.rdbuf(); std::string mf = ss.str(); size_t p = mf.find("\"name\": \"" + name + "\"");
+      if (p != std::string::npos) { size_t q = mf.find("\"schema\": \"", p), next = mf.find("\"name\": \"", p + 1); if (q != std::string::npos && q < next) { q += 11; schemaFile = dir + "/" + mf.substr(q, mf.find('"', q) - q); } } }
     std::string bytes = dslvm::read_file(dir + "/" + name + ".dslb"), schema = dslvm::read_file(schemaFile);
     Stub stub; std::string result, error; bool loaded = false, ran = false;
     try { dslvm::Program p = dslvm::Program::load(bytes, schema, stub.reg); loaded = true; dslvm::Context c; c.set("t", &stub.trace); c.set("root", &stub.root); p.run(c, stub.reg); ran = true; }
