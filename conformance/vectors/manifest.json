@@ -1,6 +1,6 @@
 {
   "format": "dsl-conformance/2",
-  "bytecode_version": 4,
+  "bytecode_version": 5,
   "generated_by": "lmscript dsl.ts (scripts/generate-dsl-conformance.ts)",
   "schema": "schema.json",
   "host": {
@@ -550,6 +550,38 @@
       }
     },
     {
+      "name": "while-break-continue",
+      "covers": "v5 while host calls, break/continue, nested mixed loops and switch control targeting its enclosing loop",
+      "schema": "schema.json",
+      "bytecode": "while-break-continue.dslb",
+      "source": "while-break-continue.dsl",
+      "mutated": false,
+      "expect": {
+        "trace": [
+          "int 1",
+          "int 3",
+          "int 10",
+          "int 11",
+          "int 20",
+          "int 20"
+        ]
+      }
+    },
+    {
+      "name": "foreach-break-continue",
+      "covers": "break and continue in a schema collection foreach, lowered through FOR_RANGE",
+      "schema": "schema.json",
+      "bytecode": "foreach-break-continue.dslb",
+      "source": "foreach-break-continue.dsl",
+      "mutated": false,
+      "expect": {
+        "trace": [
+          "int 0",
+          "int 2"
+        ]
+      }
+    },
+    {
       "name": "load-bad-magic",
       "covers": "loader: magic",
       "schema": "schema.json",
@@ -562,13 +594,13 @@
     },
     {
       "name": "load-other-version",
-      "covers": "loader: version (v3 refused, no backward compatibility)",
+      "covers": "loader: old v4 version refused; no backward compatibility",
       "schema": "schema.json",
       "bytecode": "load-other-version.dslb",
       "source": "load-other-version.dsl",
       "mutated": true,
       "expect": {
-        "load_error": "unsupported bytecode version 3"
+        "load_error": "unsupported bytecode version 4"
       }
     },
     {
@@ -646,6 +678,17 @@
       "mutated": true,
       "expect": {
         "load_error": "goes backwards"
+      }
+    },
+    {
+      "name": "load-bad-loop-pair",
+      "covers": "verifier: LOOP_BACK must target its paired WHILE_BEGIN",
+      "schema": "schema.json",
+      "bytecode": "load-bad-loop-pair.dslb",
+      "source": "load-bad-loop-pair.dsl",
+      "mutated": true,
+      "expect": {
+        "load_error": "does not target its paired WHILE_BEGIN"
       }
     }
   ]

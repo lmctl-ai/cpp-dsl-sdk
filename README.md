@@ -54,11 +54,12 @@ code; lmscript's own compile failures are exit 2. `Error::code` is `LOAD_BAD_BYT
 
 ## Versioning rule
 
-`dslvm::VERSION` is the bytecode format version this SDK reads. The SDK version equals that number (currently 4) and the
+`dslvm::VERSION` is the bytecode format version this SDK reads. The SDK version equals that number (currently 5) and the
 loader refuses every other version: there is no backward compatibility. When the compiler's format changes, the compiler,
 this header and every host move together; the history is in the living spec (v1 poc-web, v2 poc-numpy, v3 poc-curl, v4 spec
 slice S1': int64 with wraparound, `MOD_I`, typed constants, an import table of canonical signatures, context/locals/lines
-sections, the compiler-measured `max_stack`, no VM limits; S3 adds structured `range` loops with read-only hidden locals and
+sections, the compiler-measured `max_stack`, no VM limits; v5 adds structured while loops and lexical break/continue and
+refuses v4; S3 adds structured `range` loops with read-only hidden locals and
 the optional `RunStats` dispatch counter for host measurements; S4 adds the MATH opcode with 18 primitive function IDs (libm for
 sin/cos/pow, relative tolerance 1e-12 in shared vectors).
 
@@ -66,7 +67,8 @@ sin/cos/pow, relative tolerance 1e-12 in shared vectors).
 
 Wrong magic, another version (v3 included), a schema-hash mismatch, truncation, trailing bytes, unknown constant tags,
 undecodable instructions, out-of-range constant/local/import/context indexes, calls whose import kind or arity differ, ordinary
-jumps that miss an instruction start, go backwards or cross a range-loop boundary, malformed or misnested range loops, unknown
+jumps that miss an instruction start, go backwards outside a paired `LOOP_BACK` or cross a loop boundary, malformed or misnested
+range/while loops, unknown
 MATH function IDs, writes to
 their read-only hidden locals, a missing HALT, and
 context declarations or import signatures the registry does not provide (the message names the host's own signature for that

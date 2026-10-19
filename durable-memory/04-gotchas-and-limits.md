@@ -1,5 +1,10 @@
 # Gotchas and limits
 
+The loader accepts bytecode version 5 only. A v4 file is rejected before schema or code loading; regenerate all fixtures with the
+current `lmscript` compiler. `LOOP_BACK` is structurally paired with `WHILE_BEGIN`; do not hand-author arbitrary back edges.
+Ordinary jumps remain forward-only, with a verifier exception only for a break jump to the innermost loop exit. There is no
+loop budget or runtime cap: a nonterminating script can run indefinitely by design (R34/R38).
+
 - **Vendoring by hash, not by package.** Hosts copy `include/dslvm.hpp` to `cpp/dslvm.hpp`; `sdk.lock` records the SDK commit and
   the header's sha256; `scripts/sync-sdk.sh` (in each host) refreshes from a sibling checkout `../cpp-dsl-sdk` (override with
   `CPP_DSL_SDK=path`) and `scripts/sync-sdk.sh --verify` is the first check of every host `test.sh`. Editing a vendored header in

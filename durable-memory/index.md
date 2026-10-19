@@ -2,7 +2,7 @@
 
 What this repo is: the C++ runtime for lmscript `_dsl_` bytecode (one header, `include/dslvm.hpp`: loader, verifier, stack VM, host
 registry), its unit tests and the language-neutral conformance vectors. Single source of truth for the header every host vendors.
-Status (2026-10-18): EXPERIMENTAL, works; SDK version = bytecode version = 4; private repo `lmctlhq/cpp-dsl-sdk`.
+Status (2026-10-19): EXPERIMENTAL, works; SDK version = bytecode version = 5; private repo `lmctlhq/cpp-dsl-sdk`. v4 and all other versions are refused.
 
 Team guide (start here if the framework is new to you): lmctl-mono `lmscript/durable-memory/dsl-framework.md`. Operator requirements:
 lmctl-mono `lmscript/durable-memory/requirements/dsl-bytecode.md` (R05 "provided once" is this repo; R12/R13 model; R21 Rust).
@@ -10,7 +10,7 @@ lmctl-mono `lmscript/durable-memory/requirements/dsl-bytecode.md` (R05 "provided
 | File | Fact |
 | --- | --- |
 | [01-purpose-and-place.md](01-purpose-and-place.md) | why a shared SDK exists, what it is not, who consumes it |
-| [02-architecture-and-decisions.md](02-architecture-and-decisions.md) | public API, bytecode v4 layout (v3 as history), verifier guarantees, the removed limits, the dated decisions and their reasons |
+| [02-architecture-and-decisions.md](02-architecture-and-decisions.md) | public API, bytecode v5 layout, structured loop verifier, no VM caps, version refusal |
 | [03-build-test-conformance.md](03-build-test-conformance.md) | exact commands, toolchain facts, how the vectors are generated and what a second runtime must implement |
 | [04-gotchas-and-limits.md](04-gotchas-and-limits.md) | vendoring by hash, version rule, shared-box load, what the verifier cannot know |
 | [05-open-items.md](05-open-items.md) | what the next agent should do, in order |
@@ -39,9 +39,10 @@ names in signatures and use strings as runtime values. Self expands to the recei
 registration/import binding; no identity check or dynamic overload resolution is added.
 Verified: 75 native checks and 37 shared vectors.
 
-## Compiler flow-lowering integration
+## R38 while and control transfer (bytecode v5)
 
-Shared conformance now has 39 vectors, including inline foreach and int/string/enum switch.
-Thing.len()/at() are conformance-host methods, not runtime instructions. Compiler-private
-collection/discriminator temporaries use ordinary writable slots; only range controls carry
-the wire hidden flag. No interpreter or verifier change was needed. Both runtimes pass all 39.
+`WHILE_BEGIN` opens a verified loop, `WHILE_TEST` consumes a bool and branches to the paired exit, and `LOOP_BACK` is the only
+backward edge; it must return to the paired head. The verifier uses lexical loop owners to prohibit jumps into/out of loop bodies,
+except a forward break jump to the innermost loop's exit. Dataflow checks stack depth at loop heads and all control-flow joins.
+Continue targets the `FOR_NEXT` or `LOOP_BACK` instruction. No execution budget is added; non-termination is the author's
+responsibility. v4 bytecode is refused. Validation: 82 native checks plus 40 compiler-generated conformance vectors.
