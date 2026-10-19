@@ -23,5 +23,14 @@ assert.deepStrictEqual(fixture.functions, fragment.functions, 'test schema diffe
 JS_CHECK
 "${COMPILER[@]}" --dsl-signatures "$ROOT/tests/string.schema.json" > "$WORK/compiler-signatures"
 "$HOST" --signatures > "$WORK/host-signatures"
-diff -u "$WORK/compiler-signatures" "$WORK/host-signatures"
+# Native Windows C++ stdout uses CRLF; Node emits LF. Compare logical lines,
+# preserving every signature byte (including lone CRs) and the final newline.
+node - "$WORK/compiler-signatures" "$WORK/host-signatures" <<'JS_EOL'
+const fs = require('fs');
+for (const path of process.argv.slice(2)) {
+  const raw = fs.readFileSync(path, 'utf8');
+  fs.writeFileSync(path + '.lf', raw.replace(/\r\n/g, '\n'));
+}
+JS_EOL
+diff -u "$WORK/compiler-signatures.lf" "$WORK/host-signatures.lf"
 echo "string catalog compiler/registry parity passed"

@@ -28,6 +28,7 @@ $(BUILD)/stdlib_string_header.o: tests/stdlib_string_header.cpp stdlib/string.hp
 test-string-stdlib: $(BUILD)/stdlib_string_test $(BUILD)/stdlib_string_header.o
 	$(BUILD)/stdlib_string_test
 	bash tests/string-signature-parity.sh "$(abspath $(BUILD)/stdlib_string_test)"
+	bash tests/string-signature-parity-test.sh
 
 conformance: $(BUILD)/conformance
 	$(BUILD)/conformance conformance/vectors
