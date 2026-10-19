@@ -16,3 +16,9 @@ lmctl-mono `lmscript/durable-memory/requirements/dsl-bytecode.md` (R05 "provided
 | [05-open-items.md](05-open-items.md) | what the next agent should do, in order |
 
 README.md has the 20-line embedding example and the versioning rule; do not duplicate it here.
+
+## S3 structured ranges (2026-10-19)
+
+FOR_RANGE/FOR_NEXT snapshot int64 bounds, support nesting and empty ranges, and enforce loop shape at load.
+No runtime budget, depth cap or new dynamic checks. Optional RunStats counts dispatches for measurements.
+Verified: 68 unit checks and 31 shared vectors, including million iterations and i64 endpoints.

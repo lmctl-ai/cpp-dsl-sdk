@@ -14,4 +14,7 @@
   missing object is a run-time error (`context variable 'x' was not provided by the host for this run`).
 - **Object handles are raw `void*` plus a type name.** Hosts keep objects alive for the run (arena pattern in poc-numpy and
   lmor-dsl); the DSL cannot free or return them.
+- **Range loops are structurally bounded but have no runtime cap.** `FOR_RANGE` snapshots its two integer bounds, `FOR_NEXT`
+  is the sole backward edge, and loop counters/end slots are compiler-owned hidden locals. Nesting has no VM-imposed depth
+  limit; the host remains responsible for process resources. For measurements, `Program::RunStats` counts dispatches only.
 - **Shared box:** load average 5-25 on this machine; the SDK tests are light, but run one heavy job at a time and `nice` builds.
