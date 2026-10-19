@@ -157,6 +157,13 @@ int main() {
   { Asm a; a.u8(LOOP_BACK).i32(-5).halt(); expect_error("stray LOOP_BACK", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "has no matching WHILE_BEGIN"); }
   { Asm a; a.u8(WHILE_BEGIN); expect_error("unpaired WHILE_BEGIN", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "unclosed WHILE_BEGIN"); }
   { Asm a; a.u8(JUMP).i32(8).u8(WHILE_BEGIN).pushBool(false).u8(WHILE_TEST).i32(5).u8(LOOP_BACK).i32(-13).halt(); expect_error("ordinary jump cannot enter loop body", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "crosses a loop boundary"); }
+  for (bool to_exit : {false, true}) {
+    Asm a; a.u8(WHILE_BEGIN).u8(JUMP); const size_t skip = a.code.size(); a.i32(0);
+    a.pushBool(false).u8(WHILE_TEST); const size_t exit = a.code.size(); a.i32(0);
+    const size_t back_pc = a.code.size(); a.u8(LOOP_BACK); const size_t back = a.code.size(); a.i32(0);
+    const size_t end = a.code.size(); a.halt(); a.patch(skip, to_exit ? end : back_pc); a.patch(exit, end); a.patch(back, 0);
+    expect_error(to_exit ? "condition cannot break before WHILE_TEST" : "condition cannot skip WHILE_TEST", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "skips its WHILE_TEST");
+  }
   { Asm a; a.u8(WHILE_BEGIN).pushBool(false).u8(WHILE_TEST); const size_t exit = a.code.size(); a.i32(0).pushInt(1).u8(LOOP_BACK); const size_t back = a.code.size(); a.i32(0); const size_t end = a.code.size(); a.patch(exit, end); a.patch(back, 0); a.halt(); expect_error("loop back requires the head stack depth", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "inconsistent operand stack depth at control-flow join"); }
   { Asm a; a.local("int", 1).local("int", 1).pushInt(0).pushInt(1).u8(FOR_RANGE).u16(0).u16(1).i32(10).halt(); expect_error("HALT cannot occur inside a range loop", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "HALT inside loop"); }
   { Asm a; a.local("int", 1).local("int", 1).pushInt(0).pushInt(1).u8(FOR_RANGE).u16(0).u16(1).i32(10).u8(STORE_LOCAL).u16(0).u8(FOR_NEXT).u16(1).i32(-10).halt(); expect_error("loop counter is read-only", [&] { Program::load(a.file(SCHEMA), SCHEMA, h.reg); }, "read-only range slot"); }
