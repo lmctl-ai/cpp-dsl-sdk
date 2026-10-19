@@ -515,7 +515,7 @@
     },
     {
       "name": "while-break-continue",
-      "covers": "v5 while host calls, break/continue, nested mixed loops and loop-local switch break",
+      "covers": "v5 while host calls, break/continue, nested mixed loops and switch control targeting its enclosing loop",
       "schema": "schema.json",
       "bytecode": "while-break-continue.dslb",
       "source": "while-break-continue.dsl",
@@ -526,9 +526,6 @@
           "int 3",
           "int 10",
           "int 11",
-          "int 1",
-          "int 2",
-          "int 3",
           "int 20",
           "int 20"
         ]
