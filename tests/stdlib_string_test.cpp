@@ -3,6 +3,7 @@
 #include <cmath>
 #include <clocale>
 #include <iostream>
+#include <locale>
 
 using namespace dslvm::stdlib;
 // Two independent chunks call the same catalog and host callback. No VM changes.
@@ -88,6 +89,22 @@ int main(int argc, char** argv) {
   check(str_is_float(".5") && str_is_float("1.") && str_is_float("+1e-2"));
   check(str_is_float("-1.25e2") && std::abs(str_to_float("-1.25e2") + 125.0) < 1e-12 && str_to_float("+2.5") == 2.5);
   check(!str_is_float("nan") && !str_is_float("inf") && !str_is_float("1.2x") && str_to_float("bad") == 0.0);
+  for (const auto& token : {".", "1e", "1e+", "1e-", "1..0", "0X1P2", "-inf", "+NaN", "nan(payload)", "\t1", "1\n"})
+    check(!str_is_float(token) && str_to_float(token) == 0.0);
+  check(str_is_float("4.9406564584124654e-324") && str_to_float("4.9406564584124654e-324") == std::numeric_limits<double>::denorm_min());
+  check(!str_is_float("2.4703282292062327e-324") && str_is_float("2.4703282292062328e-324"));
+  check(str_to_float("2.2250738585072014e-308") == std::numeric_limits<double>::min());
+  check(str_to_float("1.7976931348623157e308") == std::numeric_limits<double>::max() && !str_is_float("1.7976931348623159e308"));
+  check(str_to_float("1.00000000000000011102230246251565404236316680908203125") == 1.0);
+  check(str_to_float("1.00000000000000011102230246251565404236316680908203126") == std::nextafter(1.0, 2.0));
+  check(str_is_float("-0") && std::signbit(str_to_float("-0")) && std::signbit(str_to_float("-0.0e-99999")));
+  check(str_is_float("0e99999") && str_is_float("0e-99999"));
+  // A custom global C++ locale must not affect decimal syntax or rounding.
+  struct CommaPoint : std::numpunct<char> { char do_decimal_point() const override { return ','; } };
+  const std::locale previous = std::locale();
+  std::locale::global(std::locale(std::locale::classic(), new CommaPoint));
+  check(str_is_float("1.25") && str_to_float("1.25") == 1.25 && !str_is_float("1,25"));
+  std::locale::global(previous);
   check(str_match("a/b.txt", "a/*.txt") && str_match("a", "[!b]") && str_match("x", "[z-a]") == false);
   check(str_match("?*[]\\", "\\?\\*\\[\\]\\\\") && str_match("[", "["));
   check(str_match("]", R"([\]])") && str_match("-", R"([a\-c])") && !str_match("b", R"([a\-c])"));
