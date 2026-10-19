@@ -96,6 +96,17 @@ dslvm::Registry registry;
 dslvm::stdlib::register_string(registry);
 ```
 
+Register once per registry, not once per chunk. Both chunks must have been compiled against the exact schema bytes supplied to their loads:
+
+```cpp
+const auto schema = dslvm::read_file("host.schema.json");
+auto first = dslvm::Program::load(dslvm::read_file("first.dslb"), schema, registry);
+auto second = dslvm::Program::load(dslvm::read_file("second.dslb"), schema, registry);
+dslvm::Context context; // Set any host context objects here.
+first.run(context, registry);
+second.run(context, registry);
+```
+
 Copy the fragment's `functions` object into the host schema. `make test` runs the unit host and compares its sorted
 `Registry::signatures()` against the current compiler's `--dsl-signatures` output for `tests/string.schema.json`. It uses
 `$LMSCRIPT_BIN` when set; otherwise it imports the compiler runner under `${HOME}/lmctl-mono/lmscript` (`LMSCRIPT_ROOT` overrides
@@ -103,14 +114,36 @@ that directory), falling back to `lmscript` on PATH when that runner is absent. 
 The parity test also checks the fixture against the shipped fragment and uses the executable selected by `BUILD`, including sanitizer builds.
 The catalog header is compiled alone with `-std=c++17 -Wall -Wextra -Werror`.
 
-String operations use byte offsets, byte lengths, and byte matching; UTF-8 is not decoded. `str_lower` and `str_upper` only map
+| Function | Parameters → result | Meaning |
+|---|---|---|
+| `str_starts_with` | string, string → bool | Prefix test; empty prefix matches. |
+| `str_ends_with` | string, string → bool | Suffix test; empty suffix matches. |
+| `str_contains` | string, string → bool | Substring test; empty needle matches. |
+| `str_lower` | string → string | ASCII lowercase. |
+| `str_upper` | string → string | ASCII uppercase. |
+| `str_substr` | string, int, int → string | Byte slice with clamping. |
+| `str_len` | string → int | Byte length, including NUL bytes. |
+| `str_match` | string, string → bool | Whole-string glob match; second argument is the pattern. |
+| `str_find` | string, string → int | First byte offset, -1 if absent; empty needle returns 0. |
+| `str_replace` | string, string, string → string | Replace non-overlapping matches. |
+| `str_trim` | string → string | Trim ASCII whitespace at both ends. |
+| `str_repeat` | string, int → string | Repeat count times; zero returns empty. |
+| `str_to_int` | string → int | Parse signed 64-bit decimal, or return 0. |
+| `str_is_int` | string → bool | Whether integer parsing succeeds. |
+| `str_to_float` | string → float | Parse finite double, or return 0.0. |
+| `str_is_float` | string → bool | Whether floating-point parsing succeeds. |
+
+String operations use byte offsets, byte lengths, and byte matching; UTF-8 is not decoded. Embedded NUL bytes are preserved,
+and NUL is not whitespace. In C++, construct NUL-containing values with an explicit-length `std::string`. `str_lower` and `str_upper` only map
 ASCII letters. `str_substr(s,start,count)` clamps negative starts to zero and overlong counts to the end; negative counts or starts
 beyond the end return empty. `str_find` returns `-1` when absent. `str_replace` replaces non-overlapping matches and leaves the
 input unchanged for an empty search string. It preflights the result size before allocation and throws `dslvm::Error`
 (code `RUN_HOST`, message `str_replace: result must be at most 67108864 bytes`) above 64 MiB, including no-op copies. `str_trim` removes ASCII space and bytes `0x09` through `0x0d`. Integer and float
-parsing require a complete, in-range decimal token; `str_to_int`/`str_to_float` return zero on failure, and `str_is_int`/
+parsing use locale-independent `std::from_chars` and require a complete, in-range decimal token with at most one leading sign.
+Whitespace, embedded NULs, hexadecimal forms, overflow and unrepresentable floating-point underflow are invalid; `str_to_int`/`str_to_float` return zero on failure, and `str_is_int`/
 `str_is_float` distinguish failure (float `nan`/infinity are invalid). `str_repeat` rejects negative counts and results above
-64 MiB with `dslvm::Error`. `str_match` supports `*` (including slash), `?`, byte classes/ranges, `[!class]`, and backslash escapes inside and outside classes.
+64 MiB with `dslvm::Error` (code `RUN_HOST`, message
+`str_repeat: count must be nonnegative and result at most 67108864 bytes`). An empty string with any nonnegative count returns empty. `str_match` supports `*` (including slash), `?`, byte classes/ranges, `[!class]`, and backslash escapes inside and outside classes.
 A leading `]` in a class is literal; descending ranges match no bytes. An unterminated `[` and a trailing backslash are literal. It uses a
 non-recursive matcher with O(1) auxiliary memory and a deterministic per-call limit of 2^27 work units.
 Each matcher iteration, character-class entry scanned (a byte or range, including malformed classes), and trailing star skipped
