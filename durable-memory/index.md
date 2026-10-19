@@ -30,3 +30,11 @@ The trusted VM decodes MATH (0x32) with shared function IDs 0-17. Float transcen
 numeric tokens at relative tolerance 1e-12. Integer abs wraps `INT64_MIN`; `int(float)` truncates toward zero, maps NaN to zero,
 and saturates infinities/out-of-range values. Float min/max propagate NaN and choose the first equal operand, preserving signed zero.
 Clamp is the direct `min(max(x, lo), hi)` formula, including reversed bounds.
+
+## S2 canonical overload binding
+
+Multiple signatures may share one function/method name. Registry keys are full canonical signatures;
+duplicate parameter tuples are refused regardless of return type. Enums retain their schema type
+names in signatures and use strings as runtime values. Self expands to the receiver type before
+registration/import binding; no identity check or dynamic overload resolution is added.
+Verified: 75 native checks and 37 shared vectors.

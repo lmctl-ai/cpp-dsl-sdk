@@ -49,3 +49,7 @@ big-endian two's-complement representation; all other fixed-width numbers are bi
 - **2026-10-18, S0': `Error::code`** classifies the existing errors (`LOAD_BAD_BYTECODE`, `LOAD_SCHEMA_MISMATCH`, `LOAD_UNBOUND`,
   `RUN_ERROR`, `RUN_HOST`, `APP_FAIL`) and `report_ok/report_error/report_app_failure` print the one-line JSON result with exit
   codes 3 (load or run) and 4 (application); compile failures are lmscript's exit 2 (R26).
+- **2026-10-18, S2: exact overload imports.** Registry entries are keyed by complete canonical signatures, including parameter
+  and return types. Distinct parameter tuples may share a name; registering the same parameter tuple twice is rejected even when
+  the return type differs. The compiler resolves one signature to each import index, and the loader binds that exact entry. Enum
+  names are ordinary schema type names in signatures. The VM adds no dynamic overload, arity, or type dispatch.

@@ -14,13 +14,13 @@
 
 struct Thing { int64_t id; };
 struct Stub {
-  std::vector<std::string> trace; std::vector<std::unique_ptr<Thing>> things; Thing root{0};
+  std::vector<std::string> trace; std::vector<std::unique_ptr<Thing>> things; Thing root{0}, variable{0};
   dslvm::Registry reg;
   Thing* make(int64_t id) { things.push_back(std::make_unique<Thing>(Thing{id})); return things.back().get(); }
   static std::string fmt(double f) { char buf[64]; std::snprintf(buf, sizeof buf, "%.15g", f); return buf; }
   Stub() {
     using namespace dslvm;
-    reg.context("t", "Trace").context("root", "Thing");
+    reg.context("t", "Trace").context("root", "Thing").context("v", "Var");
     reg.method("Trace", "int", {"int"}, "void", [&](void*, Args& a) { trace.push_back("int " + std::to_string(a[0].i)); return Value::none(); });
     reg.method("Trace", "float", {"float"}, "void", [&](void*, Args& a) { trace.push_back("float " + fmt(a[0].f)); return Value::none(); });
     reg.method("Trace", "str", {"string"}, "void", [&](void*, Args& a) { trace.push_back("str " + a[0].s); return Value::none(); });
@@ -30,6 +30,18 @@ struct Stub {
     reg.method("Thing", "next", {}, "Thing", [&](void* self, Args&) { return Value::object("Thing", make(static_cast<Thing*>(self)->id + 1)); });
     reg.method("Thing", "name", {}, "string", [&](void* self, Args&) { return Value::string("thing-" + std::to_string(static_cast<Thing*>(self)->id)); });
     reg.method("Thing", "scaled", {"float"}, "float", [&](void* self, Args& a) { return Value::real(static_cast<Thing*>(self)->id * a[0].f); });
+    reg.method("Trace", "int", {"float"}, "void", [&](void*, Args& a) { trace.push_back("float " + fmt(a[0].f)); return Value::none(); });
+    reg.method("Trace", "status", {}, "Status", [](void*, Args&) { return Value::string("OPTIMAL"); });
+    reg.method("Thing", "plus", {"Thing"}, "Thing", [&](void* p, Args& a) { return Value::object("Thing", make(from_twos_complement(uint64_t(static_cast<Thing*>(p)->id) + uint64_t(static_cast<Thing*>(a[0].obj)->id)))); });
+    reg.method("Thing", "minus", {"Thing"}, "Thing", [&](void* p, Args& a) { return Value::object("Thing", make(from_twos_complement(uint64_t(static_cast<Thing*>(p)->id) - uint64_t(static_cast<Thing*>(a[0].obj)->id)))); });
+    reg.method("Thing", "times", {"int"}, "Thing", [&](void* p, Args& a) { return Value::object("Thing", make(from_twos_complement(uint64_t(static_cast<Thing*>(p)->id) * uint64_t(a[0].i)))); });
+    reg.method("Thing", "neg", {}, "Thing", [&](void* p, Args&) { return Value::object("Thing", make(from_twos_complement(0 - uint64_t(static_cast<Thing*>(p)->id)))); });
+    reg.method("Thing", "rminus", {"int"}, "Thing", [&](void* p, Args& a) { return Value::object("Thing", make(from_twos_complement(uint64_t(a[0].i) - uint64_t(static_cast<Thing*>(p)->id)))); });
+    reg.method("Thing", "set", {"int"}, "Thing", [](void* p, Args& a) { static_cast<Thing*>(p)->id = a[0].i; return Value::object("Thing", p); });
+    reg.method("Var", "id", {}, "int", [](void* p, Args&) { return Value::integer(static_cast<Thing*>(p)->id); });
+    reg.method("Var", "expr", {}, "Thing", [&](void* p, Args&) { auto n = static_cast<Thing*>(p)->id; trace.push_back("expr " + std::to_string(n)); return Value::object("Thing", make(n)); });
+    reg.function("var", {"int"}, "Var", [&](Args& a) { trace.push_back("var " + std::to_string(a[0].i)); return Value::object("Var", make(a[0].i)); });
+    reg.function("twice", {"float"}, "float", [](Args& a) { return Value::real(a[0].f * 2.0); });
     reg.function("thing", {"int"}, "Thing", [&](Args& a) { return Value::object("Thing", make(a[0].i)); });
     reg.function("twice", {"int"}, "int", [&](Args& a) { return Value::integer(a[0].i * 2); });
     reg.function("bound", {"int"}, "int", [&](Args& a) { trace.push_back("bound " + std::to_string(a[0].i)); return Value::integer(a[0].i); });
@@ -84,7 +96,7 @@ int main(int argc, char** argv) {
       if (p != std::string::npos) { size_t q = mf.find("\"schema\": \"", p), next = mf.find("\"name\": \"", p + 1); if (q != std::string::npos && q < next) { q += 11; schemaFile = dir + "/" + mf.substr(q, mf.find('"', q) - q); } } }
     std::string bytes = dslvm::read_file(dir + "/" + name + ".dslb"), schema = dslvm::read_file(schemaFile);
     Stub stub; std::string result, error; bool loaded = false, ran = false;
-    try { dslvm::Program p = dslvm::Program::load(bytes, schema, stub.reg); loaded = true; dslvm::Context c; c.set("t", &stub.trace); c.set("root", &stub.root); p.run(c, stub.reg); ran = true; }
+    try { dslvm::Program p = dslvm::Program::load(bytes, schema, stub.reg); loaded = true; dslvm::Context c; c.set("t", &stub.trace); c.set("root", &stub.root); c.set("v", &stub.variable); p.run(c, stub.reg); ran = true; }
     catch (const dslvm::Error& e) { error = e.what(); }
     bool ok;
     if (kind == "trace") {
