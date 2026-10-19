@@ -37,7 +37,7 @@ Multiple signatures may share one function/method name. Registry keys are full c
 duplicate parameter tuples are refused regardless of return type. Enums retain their schema type
 names in signatures and use strings as runtime values. Self expands to the receiver type before
 registration/import binding; no identity check or dynamic overload resolution is added.
-Verified: 75 native checks and 37 shared vectors.
+Verified: 82 native checks and 42 shared vectors.
 
 ## R38 while and control transfer (bytecode v5)
 
@@ -45,4 +45,4 @@ Verified: 75 native checks and 37 shared vectors.
 backward edge; it must return to the paired head. The verifier uses lexical loop owners to prohibit jumps into/out of loop bodies,
 except a forward break jump to the innermost loop's exit. Dataflow checks stack depth at loop heads and all control-flow joins.
 Continue targets the `FOR_NEXT` or `LOOP_BACK` instruction. No execution budget is added; non-termination is the author's
-responsibility. v4 bytecode is refused. Validation: 82 native checks plus 40 compiler-generated conformance vectors.
+responsibility. v4 bytecode is refused. Validation: 82 native checks plus 42 compiler-generated conformance vectors.
