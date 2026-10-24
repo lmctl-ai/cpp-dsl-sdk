@@ -1,4 +1,4 @@
-# cpp-dsl-sdk
+# lmcode-cpp
 
 The C++ runtime for lmscript `_dsl_` bytecode: loader, verifier, VM and host registry in one header, `include/dslvm.hpp`.
 C++17, standard library only, no dependencies. This repository is the single source of truth for the header; hosts vendor it
@@ -164,9 +164,15 @@ the same files; nothing in the vectors is C++-specific.
 ## Consuming it
 
 Hosts keep a verbatim copy at `cpp/dslvm.hpp` plus `sdk.lock` (SDK commit and the header's sha256) and `scripts/sync-sdk.sh`,
-which copies the header from a sibling checkout `../cpp-dsl-sdk` and rewrites the lock; each host's `test.sh` fails when the
+which copies the header from a sibling checkout `../lmcode-cpp` and rewrites the lock; each host's `test.sh` fails when the
 vendored header's hash differs from the lock. Example hosts: lmcad (CAD/rendering), lmhtml (HTML tooling), lmor-dsl (OR-Tools).
 
 ## License
 
 This project, including `include/dslvm.hpp` and the optional `stdlib/` catalog, is licensed under the MIT License. See [`LICENSE`](LICENSE). These are project-authored files and require no additional third-party notices.
+
+## Sibling runtimes
+
+The same bytecode v5 and the same conformance vectors are implemented by [lmcode-cpp](https://github.com/lmctl-ai/lmcode-cpp),
+[lmcode-rust](https://github.com/lmctl-ai/lmcode-rust), [lmcode-go](https://github.com/lmctl-ai/lmcode-go) and
+[lmcode-csharp](https://github.com/lmctl-ai/lmcode-csharp). Each is a library that turns an AOT executable into an lmscript host.

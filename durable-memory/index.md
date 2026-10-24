@@ -1,4 +1,4 @@
-# cpp-dsl-sdk notes
+# lmcode-cpp notes
 
 This repository contains a header-only C++ runtime, native tests, and language-neutral conformance fixtures for lmscript bytecode.
 It is experimental. The current SDK and bytecode format version is 5; other versions are refused.
