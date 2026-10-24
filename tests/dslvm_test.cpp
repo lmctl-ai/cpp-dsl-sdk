@@ -80,6 +80,29 @@ static void expect_trace(const std::string& label, Host& h, const std::string& b
 int main() {
   Host h;
   const int64_t MAX = INT64_MAX, MIN = INT64_MIN;
+  // Malformed values are VM failures, not host callback failures. Exercise every
+  // type-check family that formerly used Error(message)'s RUN_HOST default.
+  const std::vector<std::pair<Asm, std::string>> type_errors = {
+    {Asm().pushInt(1).pushStr("x").u8(EQ).halt(), "cannot compare int with string"},
+    {Asm().pushStr("x").pushInt(1).u8(ADD_I).halt(), "int operator applied to string and int"},
+    {Asm().pushInt(1).pushFloat(1).u8(ADD_F).halt(), "float operator applied to int and float"},
+    {Asm().pushStr("x").u8(NEG_I).halt(), "int negation applied to string"},
+    {Asm().pushInt(1).u8(NEG_F).halt(), "float negation applied to int"},
+    {Asm().pushStr("x").u8(I2F).halt(), "float() applied to string"},
+    {Asm().pushInt(1).pushStr("x").u8(CONCAT).halt(), "string + applied to int and string"},
+    {Asm().pushStr("x").u8(I2S).halt(), "str(int) applied to string"},
+    {Asm().pushInt(1).u8(F2S).halt(), "str(float) applied to int"},
+    {Asm().pushInt(1).u8(B2S).halt(), "str(bool) applied to int"},
+    {Asm().pushInt(1).u8(NOT).halt(), "! applied to a int"},
+    {Asm().pushInt(1).u8(JUMP_IF_FALSE).i32(0).halt(), "condition is a int, not a bool"},
+  };
+  for (const auto& test : type_errors) {
+    bool caught = false;
+    try { h.run(test.first.file(SCHEMA)); }
+    catch (const Error& e) { caught = true; assert(e.code == "RUN_ERROR" && e.message == test.second); }
+    assert(caught); ++passed;
+    std::cout << "ok - VM type error code: " << test.second << "\n";
+  }
   // Valid programs.
   { Asm a; a.ctx("t", "Trace").pushInt(1).pushInt(2).u8(ADD_I).method(T_INT, 1).ctx("t", "Trace").pushStr("a").pushStr("b").u8(CONCAT).method(T_STR, 1).halt(); expect_trace("arithmetic, concat, method calls", h, a.file(SCHEMA), {"int 3", "str ab"}); }
   { Asm a; a.local("int"); a.pushInt(21).fn(TWICE, 1).u8(STORE_LOCAL).u16(0).ctx("t", "Trace").u8(LOAD_LOCAL).u16(0).method(T_INT, 1).halt(); expect_trace("host function and locals", h, a.file(SCHEMA), {"int 42"}); }

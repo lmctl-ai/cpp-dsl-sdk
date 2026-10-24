@@ -52,6 +52,7 @@ struct Stub {
     reg.function("twice", {"int"}, "int", [&](Args& a) { return Value::integer(a[0].i * 2); });
     reg.function("bound", {"int"}, "int", [&](Args& a) { trace.push_back("bound " + std::to_string(a[0].i)); return Value::integer(a[0].i); });
     reg.function("half", {"float"}, "float", [&](Args& a) { return Value::real(a[0].f / 2.0); });
+    reg.function("bad_int", {}, "int", [](Args&) { return Value::string("x"); });
     reg.function("yes", {}, "bool", [&](Args&) { trace.push_back("yes"); return Value::boolean(true); });
     reg.function("fail", {"string"}, "void", [&](Args& a) -> Value { throw Error(a[0].s); });
   }
