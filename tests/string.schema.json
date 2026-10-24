@@ -1,6 +1,6 @@
 {
   "dsl.schema": 2,
-  "name": "cpp_dsl_sdk_string_catalog_test",
+  "name": "lmcode_cpp_string_catalog_test",
   "types": {},
   "functions": {
     "str_starts_with": [{ "params": ["string", "string"], "returns": "bool" }],
