@@ -2,6 +2,7 @@
 // NAME.dslb against NAME.expect. An independent runtime (for example, Rust) can implement the same stub and reads the same files.
 // Usage: build/conformance conformance/vectors
 #include "dslvm.hpp"
+#include "../stdlib/string.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -22,6 +23,22 @@ struct Stub {
   static std::string fmt(double f) { char buf[64]; std::snprintf(buf, sizeof buf, "%.15g", f); return buf; }
   Stub() {
     using namespace dslvm;
+    stdlib::register_string(reg);
+    // Portable fixture adapter: raw bytes are supplied independently of UTF-8
+    // source literals, and binary results are traced as unambiguous hex.
+    reg.function("bytes", {"string"}, "string", [](Args& a) {
+      const std::string& hex = a[0].s;
+      auto digit = [](char c) -> unsigned {
+        if (c >= '0' && c <= '9') return unsigned(c - '0');
+        if (c >= 'a' && c <= 'f') return unsigned(c - 'a' + 10);
+        throw Error("bytes: expected lowercase hexadecimal pairs");
+      };
+      if (hex.size() % 2) throw Error("bytes: expected lowercase hexadecimal pairs");
+      std::string bytes;
+      for (size_t i = 0; i < hex.size(); i += 2) bytes.push_back(char(digit(hex[i]) * 16 + digit(hex[i + 1])));
+      return Value::string(std::move(bytes));
+    });
+    reg.method("Trace", "hex", {"string"}, "void", [&](void*, Args& a) { trace.push_back("hex " + hex(a[0].s)); return Value::none(); });
     reg.context("t", "Trace").context("root", "Thing").context("v", "Var").context("xs", "IntList");
     reg.method("IntList", "len", {}, "int", [](void* self, Args&) { return Value::integer(int64_t(static_cast<IntList*>(self)->values.size())); });
     reg.method("IntList", "at", {"int"}, "int", [](void* self, Args& a) { return Value::integer(static_cast<IntList*>(self)->values.at(size_t(a[0].i))); });

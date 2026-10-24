@@ -85,7 +85,7 @@ Integer arithmetic is 64-bit two's complement and wraps; division and remainder 
 ## Test
 
     make test           # native runtime and optional string catalog tests
-    make conformance    # language-neutral vectors in conformance/vectors
+    make conformance    # core runtime vectors and all 18 string catalog vectors
     make test-string-stdlib # stdlib/string.hpp unit cases and schema/registry/compiler signature parity
 
 ## Standard library catalog
@@ -176,3 +176,6 @@ This project, including `include/dslvm.hpp` and the optional `stdlib/` catalog, 
 The same bytecode v5 and the same conformance vectors are implemented by [lmcode-cpp](https://github.com/lmctl-ai/lmcode-cpp),
 [lmcode-rust](https://github.com/lmctl-ai/lmcode-rust), [lmcode-go](https://github.com/lmctl-ai/lmcode-go) and
 [lmcode-csharp](https://github.com/lmctl-ai/lmcode-csharp). Each is a library that turns an AOT executable into an lmscript host.
+
+Optional catalog conformance fixtures and their portable byte-tracing host contract are in
+[`conformance/stdlib-vectors`](conformance/stdlib-vectors/README.md).

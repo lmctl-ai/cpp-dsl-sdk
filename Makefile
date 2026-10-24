@@ -9,7 +9,7 @@ $(BUILD)/dslvm_test: tests/dslvm_test.cpp include/dslvm.hpp
 	@mkdir -p $(BUILD)
 	$(CXX) $(CXXFLAGS) -I include -o $@ tests/dslvm_test.cpp
 
-$(BUILD)/conformance: conformance/run.cpp include/dslvm.hpp
+$(BUILD)/conformance: conformance/run.cpp include/dslvm.hpp stdlib/string.hpp
 	@mkdir -p $(BUILD)
 	$(CXX) $(CXXFLAGS) -I include -o $@ conformance/run.cpp
 
@@ -32,6 +32,7 @@ test-string-stdlib: $(BUILD)/stdlib_string_test $(BUILD)/stdlib_string_header.o
 
 conformance: $(BUILD)/conformance
 	$(BUILD)/conformance conformance/vectors
+	$(BUILD)/conformance conformance/stdlib-vectors
 
 clean:
 	rm -rf $(BUILD)
