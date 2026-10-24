@@ -10,5 +10,6 @@ It is experimental. The current SDK and bytecode format version is 5; other vers
 | [03-build-test-conformance.md](03-build-test-conformance.md) | Build commands, tests, fixtures, and optional string catalog |
 | [04-gotchas-and-limits.md](04-gotchas-and-limits.md) | Versioning, trust model, vendoring, and host responsibilities |
 | [05-open-items.md](05-open-items.md) | Possible future improvements |
+| [06-stdlib-catalog.md](06-stdlib-catalog.md) | Catalog contract, byte-string rule, adding functions, stdlib vectors |
 
 The root README has the embedding example, command summary, catalog reference, and license.
